@@ -1,0 +1,15 @@
+# Python environments and caches
+.venv/
+**/.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local environment files
+.env
+!.env.example
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
