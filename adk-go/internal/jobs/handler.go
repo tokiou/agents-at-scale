@@ -3,6 +3,8 @@ package jobs
 import (
 	"encoding/json"
 	"net/http"
+
+	"github.com/go-chi/chi/v5"
 )
 
 type jobRequest struct {
@@ -17,16 +19,11 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
-func (h *Handler) RegisterRoutes(router *http.ServeMux) {
-	router.Handle("/jobs", h)
+func (h *Handler) Register(router chi.Router) {
+	router.Post("/jobs", h.Publish)
 }
 
-func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
+func (h *Handler) Publish(w http.ResponseWriter, r *http.Request) {
 	var request jobRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		http.Error(w, "invalid JSON body", http.StatusBadRequest)

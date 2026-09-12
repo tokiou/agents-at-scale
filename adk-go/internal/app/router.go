@@ -1,15 +1,19 @@
 package app
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+)
 
 type Registrar interface {
-	RegisterRoutes(*http.ServeMux)
+	Register(chi.Router)
 }
 
 func NewRouter(registrars ...Registrar) http.Handler {
-	router := http.NewServeMux()
+	router := chi.NewRouter()
 	for _, registrar := range registrars {
-		registrar.RegisterRoutes(router)
+		registrar.Register(router)
 	}
 	return router
 }
