@@ -45,7 +45,8 @@ class RabbitMQ:
     ) -> str:
         return await self._queue.consume(callback)
 
-    async def close(self, consumer_tag: str | None = None) -> None:
-        if consumer_tag is not None:
-            await self._queue.cancel(consumer_tag)
+    async def cancel_consumer(self, consumer_tag: str) -> None:
+        await self._queue.cancel(consumer_tag)
+
+    async def close(self) -> None:
         await self._connection.close()

@@ -1,17 +1,13 @@
-import json
-import logging
 from contextlib import asynccontextmanager
-from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, Request
-from pydantic import BaseModel, Field
+from fastapi import FastAPI
 
+from app.jobs import router as jobs_router
+from app.jobs.service import JobService
 from app.config import load_settings
 from app.platform.postgres import create_pool
-from app.platform.rabbitmq import Job, RabbitMQ
-from app.platform.redis import create_client, set_job_status
-
-logger = logging.getLogger(__name__)
+from app.platform.rabbitmq import RabbitMQ
+from app.platform.redis import create_client
 
 settings = load_settings()
 
@@ -21,7 +17,7 @@ async def lifespan(application: FastAPI):
     pool = create_pool(settings)
     redis = None
     rabbitmq = None
-    consumer_tag = None
+    job_service = None
     try:
         pool.open(wait=True)
         with pool.connection() as connection:
@@ -31,45 +27,22 @@ async def lifespan(application: FastAPI):
         rabbitmq = await RabbitMQ.connect(settings)
         application.state.redis = redis
         application.state.rabbitmq = rabbitmq
-        consumer_tag = await rabbitmq.consume(consume_job)
+        job_service = JobService(redis, rabbitmq)
+        await job_service.start()
+        application.state.jobs = job_service
         yield
     finally:
         pool.close()
+        if job_service is not None:
+            await job_service.stop()
         if rabbitmq is not None:
-            await rabbitmq.close(consumer_tag)
+            await rabbitmq.close()
         if redis is not None:
             await redis.aclose()
 
 
 application = FastAPI(title="Agents at Scale - LangGraph", lifespan=lifespan)
-
-
-class JobRequest(BaseModel):
-    payload: dict = Field(default_factory=dict)
-
-
-async def consume_job(message) -> None:
-    try:
-        job = Job(**json.loads(message.body.decode()))
-        await set_job_status(application.state.redis, job.id, "processing")
-        logger.info("job consumed id=%s payload=%s", job.id, job.payload)
-        await set_job_status(application.state.redis, job.id, "completed")
-        await message.ack()
-    except Exception:
-        logger.exception("job processing failed")
-        await message.nack(requeue=False)
-
-
-@application.post("/jobs", status_code=202)
-async def publish_job(job_request: JobRequest, request: Request):
-    job = Job(id=str(uuid4()), payload=job_request.payload)
-    try:
-        await set_job_status(request.app.state.redis, job.id, "published")
-        await request.app.state.rabbitmq.publish(job)
-    except Exception as error:
-        await set_job_status(request.app.state.redis, job.id, "failed")
-        raise HTTPException(status_code=500, detail="publish job failed") from error
-    return {"id": job.id, "status": "published"}
+application.include_router(jobs_router)
 
 
 @application.get("/health")
