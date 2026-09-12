@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/tokiou/agents-at-scale/internal/config"
+	"github.com/tokiou/agents-at-scale/internal/health"
 	"github.com/tokiou/agents-at-scale/internal/jobs"
 	"github.com/tokiou/agents-at-scale/internal/platform/postgres"
 	"github.com/tokiou/agents-at-scale/internal/platform/rabbitmq"
@@ -46,12 +47,11 @@ func Run(cfg config.Config) error {
 		return err
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/health", health)
-	mux.Handle("/jobs", jobs.NewHandler(jobService))
+	jobHandler := jobs.NewHandler(jobService)
+	healthHandler := health.NewHandler()
 	server := &http.Server{
 		Addr:    cfg.Address,
-		Handler: mux,
+		Handler: NewRouter(healthHandler, jobHandler),
 	}
 	go func() {
 		<-ctx.Done()
@@ -67,9 +67,4 @@ func Run(cfg config.Config) error {
 		return fmt.Errorf("run server: %w", err)
 	}
 	return nil
-}
-
-func health(w http.ResponseWriter, _ *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(`{"status":"ok"}`))
 }
