@@ -1,3 +1,3 @@
-from app.jobs.service import router
+from app.jobs.router import router
 
 __all__ = ["router"]

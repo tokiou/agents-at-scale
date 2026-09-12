@@ -2,18 +2,10 @@ import json
 import logging
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, Field
-
 from app.platform.rabbitmq import Job, RabbitMQ
 from app.platform.redis import set_job_status
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/jobs")
-
-
-class JobRequest(BaseModel):
-    payload: dict = Field(default_factory=dict)
 
 
 class JobService:
@@ -50,13 +42,3 @@ class JobService:
         except Exception:
             logger.exception("job processing failed")
             await message.nack(requeue=False)
-
-
-@router.post("", status_code=202)
-async def publish_job(job_request: JobRequest, request: Request):
-    service: JobService = request.app.state.jobs
-    try:
-        job = await service.publish(job_request.payload)
-    except Exception as error:
-        raise HTTPException(status_code=500, detail="publish job failed") from error
-    return {"id": job.id, "status": "published"}

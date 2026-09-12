@@ -48,7 +48,7 @@ func Run(cfg config.Config) error {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", health)
-	mux.Handle("/jobs", jobService.Handler())
+	mux.Handle("/jobs", jobs.NewHandler(jobService))
 	server := &http.Server{
 		Addr:    cfg.Address,
 		Handler: mux,
