@@ -31,15 +31,15 @@ Each runtime owns its PostgreSQL, Redis and RabbitMQ containers. Do not centrali
 
 Use vertical domain modules instead of generic global `models`, `repositories` or `database` packages.
 
-The flight support and rebooking domain belongs in:
+The airline support and rebooking domain belongs in:
 
-- Go: `adk-go/internal/flightops/`
-- Python: `langgraph-python/app/flight_ops/`
+- Go: `adk-go/internal/airline/`
+- Python: `langgraph-python/app/airline/`
 
 The expected module shape is:
 
 ```text
-model.go / models.py                 domain entities and value objects
+model.go / model.py                  domain entities and value objects
 repository.go / repository.py       repository contract
 postgres_repository.go              PostgreSQL implementation
 service.go / service.py              business rules and use cases
@@ -72,7 +72,7 @@ config -> platform clients -> repositories -> services -> handlers/routers -> ap
 Example module registration:
 
 ```go
-handler := flightops.NewHandler(service)
+handler := airline.NewHandler(service)
 handler.Register(router)
 ```
 
