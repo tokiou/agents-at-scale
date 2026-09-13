@@ -39,9 +39,9 @@ The airline support and rebooking domain belongs in:
 The expected module shape is:
 
 ```text
-model.go / model.py                  domain entities and value objects
-repository.go / repository.py       repository contract
-postgres_repository.go              PostgreSQL implementation
+models.go / models.py                domain entities and value objects
+repository/*.go                      PostgreSQL repositories by use case
+repository/*.py                      PostgreSQL repositories by use case
 service.go / service.py              business rules and use cases
 handler.go / router.py               HTTP transport
 ```
@@ -89,6 +89,8 @@ handler.Register(router)
 ## Infrastructure
 
 - PostgreSQL is the persistent store and is accessed through the module repository.
+- Go repositories use `pgx` through generated `sqlc` code. SQL belongs in `adk-go/db/query` and generated files under `adk-go/internal/platform/postgres/sqlc` must not be edited manually.
+- Python repositories use SQLAlchemy 2.x async with `asyncpg`; do not add raw SQL strings for airline queries.
 - Redis is for ephemeral state, idempotency, job status and coordination.
 - RabbitMQ is the durable job transport.
 - Job consumers must acknowledge messages only after successful processing.
@@ -149,6 +151,7 @@ Python changes must pass the available environment checks, including:
 
 ## Git Workflow
 
+- Do not create commits or push changes unless the user explicitly authorizes it.
 - Use a focused branch for non-trivial work, for example `feat/flight-agent-data-model`.
 - Use Conventional Commits:
   - `feat:` for new behavior
