@@ -14,3 +14,4 @@ logs:
 
 test:
 	.venv/bin/python -m compileall -q app
+	.venv/bin/python -m unittest discover -s tests -p 'test_*.py'
