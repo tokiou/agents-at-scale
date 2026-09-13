@@ -1,14 +1,18 @@
-from psycopg_pool import ConnectionPool
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 
 from app.config import Settings
 
 
-def create_pool(settings: Settings) -> ConnectionPool:
-    min_size = min(settings.max_idle_conns, settings.max_open_conns)
-    return ConnectionPool(
-        conninfo=settings.database_url,
-        min_size=min_size,
-        max_size=settings.max_open_conns,
-        max_lifetime=settings.conn_max_lifetime_minutes * 60,
-        open=False,
+def create_engine(settings: Settings) -> AsyncEngine:
+    database_url = settings.database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    return create_async_engine(
+        database_url,
+        pool_size=settings.max_open_conns,
+        max_overflow=0,
+        pool_recycle=settings.conn_max_lifetime_minutes * 60,
+        pool_pre_ping=True,
     )
+
+
+def create_session_factory(engine: AsyncEngine):
+    return async_sessionmaker(engine, expire_on_commit=False)

@@ -1,41 +1,22 @@
-from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from enum import StrEnum
 from uuid import UUID
 
+from pydantic import BaseModel, ConfigDict
 
-class ReservationStatus(StrEnum):
-    CONFIRMED = "CONFIRMED"
-    CANCELLED = "CANCELLED"
-    COMPLETED = "COMPLETED"
-
-
-class FlightStatus(StrEnum):
-    SCHEDULED = "SCHEDULED"
-    DELAYED = "DELAYED"
-    CANCELLED = "CANCELLED"
-    BOARDING = "BOARDING"
-    DEPARTED = "DEPARTED"
-    COMPLETED = "COMPLETED"
+from app.airline.models import (
+    FlightStatus,
+    ReservationStatus,
+    SegmentStatus,
+    TravelCreditStatus,
+)
 
 
-class SegmentStatus(StrEnum):
-    CONFIRMED = "CONFIRMED"
-    CHANGED = "CHANGED"
-    CANCELLED = "CANCELLED"
-    FLOWN = "FLOWN"
+class DTO(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
 
 
-class TravelCreditStatus(StrEnum):
-    AVAILABLE = "AVAILABLE"
-    PARTIALLY_USED = "PARTIALLY_USED"
-    USED = "USED"
-    EXPIRED = "EXPIRED"
-
-
-@dataclass(slots=True)
-class Customer:
+class CustomerSchema(DTO):
     id: UUID
     first_name: str
     last_name: str
@@ -45,8 +26,7 @@ class Customer:
     updated_at: datetime
 
 
-@dataclass(slots=True)
-class Passenger:
+class PassengerSchema(DTO):
     id: UUID
     first_name: str
     last_name: str
@@ -54,8 +34,7 @@ class Passenger:
     created_at: datetime
 
 
-@dataclass(slots=True)
-class Reservation:
+class ReservationSchema(DTO):
     id: UUID
     booking_reference: str
     customer_id: UUID
@@ -66,14 +45,7 @@ class Reservation:
     updated_at: datetime
 
 
-@dataclass(slots=True)
-class ReservationPassenger:
-    reservation_id: UUID
-    passenger_id: UUID
-
-
-@dataclass(slots=True)
-class Flight:
+class FlightSchema(DTO):
     id: UUID
     flight_number: str
     origin_airport: str
@@ -86,8 +58,7 @@ class Flight:
     updated_at: datetime
 
 
-@dataclass(slots=True)
-class FareClass:
+class FareClassSchema(DTO):
     id: UUID
     code: str
     name: str
@@ -98,8 +69,7 @@ class FareClass:
     created_at: datetime
 
 
-@dataclass(slots=True)
-class FlightFare:
+class FlightFareSchema(DTO):
     id: UUID
     flight_id: UUID
     fare_class_id: UUID
@@ -108,8 +78,7 @@ class FlightFare:
     available_seats: int
 
 
-@dataclass(slots=True)
-class ReservationSegment:
+class ReservationSegmentSchema(DTO):
     id: UUID
     reservation_id: UUID
     flight_id: UUID
@@ -121,8 +90,7 @@ class ReservationSegment:
     updated_at: datetime
 
 
-@dataclass(slots=True)
-class TravelCredit:
+class TravelCreditSchema(DTO):
     id: UUID
     customer_id: UUID
     original_amount: Decimal
@@ -133,8 +101,7 @@ class TravelCredit:
     created_at: datetime
 
 
-@dataclass(slots=True)
-class FlightChange:
+class FlightChangeSchema(DTO):
     id: UUID
     reservation_segment_id: UUID
     old_flight_id: UUID
@@ -146,3 +113,49 @@ class FlightChange:
     travel_credit_used: Decimal
     currency: str
     created_at: datetime
+
+
+class ReservationSegmentDetailsSchema(DTO):
+    segment: ReservationSegmentSchema
+    flight: FlightSchema
+    fare_class: FareClassSchema
+
+
+class ReservationDetailsSchema(DTO):
+    reservation: ReservationSchema
+    customer: CustomerSchema
+    passengers: list[PassengerSchema]
+    segments: list[ReservationSegmentDetailsSchema]
+
+
+class SearchRebookingOptionsInputSchema(BaseModel):
+    segment_id: UUID
+    departure_from: datetime
+    departure_to: datetime
+    passenger_count: int
+
+
+class SearchAvailableFlightsParamsSchema(BaseModel):
+    origin: str
+    destination: str
+    departure_from: datetime
+    departure_to: datetime
+    passenger_count: int
+
+
+class AvailableFareSchema(DTO):
+    fare_class: FareClassSchema
+    flight_fare: FlightFareSchema
+
+
+class AvailableFlightSchema(DTO):
+    flight: FlightSchema
+    fares: list[AvailableFareSchema]
+
+
+class RebookingOptionSchema(DTO):
+    flight: FlightSchema
+    fare_class: FareClassSchema
+    flight_fare: FlightFareSchema
+    fare_difference: Decimal
+    change_fee: Decimal
