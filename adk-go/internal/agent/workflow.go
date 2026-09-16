@@ -34,11 +34,13 @@ func newWorkflow() (adkagent.Agent, error) {
 			"invalid": explainInvalidChange,
 			"valid":   executeRebooking,
 		}).
+		AddRoute(explainInvalidChange, evaluateOptions, workflow.StringRoute("retry")).
 		Add(executeRebooking, verifyRebooking)
 
 		// TODO: validateChange must become an emitting/routing node and emit
 		// the route consumed by the conditional edges above. The placeholder
-		// intentionally does not select either branch.
+		// intentionally does not select either branch. The invalid explanation
+		// will later emit "retry" when another evaluation should be attempted.
 	root, err := workflowagent.New(workflowagent.Config{
 		Name:        "airline_rebooking",
 		Description: "Handles airline reservation rebooking workflows.",
