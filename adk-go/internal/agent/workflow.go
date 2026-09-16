@@ -5,11 +5,12 @@ import (
 
 	adkagent "google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/agent/workflowagent"
+	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/workflow"
 )
 
-func newWorkflow() (adkagent.Agent, error) {
-	understandRequest := newUnderstandRequestNode()
+func newWorkflow(llm model.LLM) (adkagent.Agent, error) {
+	understandRequest := newUnderstandRequestNode(llm)
 	loadReservation := newLoadReservationNode()
 	searchAlternatives := newSearchAlternativesNode()
 	loadTravelCredits := newLoadTravelCreditsNode()

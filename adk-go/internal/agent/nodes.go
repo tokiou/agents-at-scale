@@ -1,23 +1,63 @@
 package agent
 
 import (
+	"encoding/json"
+	"fmt"
+	"strings"
+
+	"github.com/tokiou/agents-at-scale/internal/agent/prompts"
+
 	adkagent "google.golang.org/adk/v2/agent"
+	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/workflow"
+	"google.golang.org/genai"
 )
 
-func newUnderstandRequestNode() workflow.Node {
+func newUnderstandRequestNode(llm model.LLM) workflow.Node {
 	return workflow.NewFunctionNode(
 		"understand_request",
 		func(ctx adkagent.Context, input string) (RebookingRequest, error) {
-			/*
-				TODO: Use an LLM to understand the user's request and extract the
-				booking reference, requested changes, constraints, and preferences.
-				Do not parse or infer request data in this skeleton.
-			*/
-			return RebookingRequest{}, nil
+			if llm == nil {
+				return RebookingRequest{}, fmt.Errorf("understand request model is required")
+			}
+
+			request := &model.LLMRequest{
+				Contents: []*genai.Content{
+					{Role: "system", Parts: []*genai.Part{{Text: prompts.UnderstandRequest}}},
+					genai.NewContentFromText(input, genai.RoleUser),
+				},
+			}
+			var response *model.LLMResponse
+			for candidate, err := range llm.GenerateContent(ctx, request, false) {
+				if err != nil {
+					return RebookingRequest{}, fmt.Errorf("understand request model call: %w", err)
+				}
+				if candidate != nil {
+					response = candidate
+				}
+			}
+			if response == nil || response.Content == nil {
+				return RebookingRequest{}, fmt.Errorf("understand request model returned no content")
+			}
+
+			var result RebookingRequest
+			if err := json.Unmarshal([]byte(contentText(response.Content)), &result); err != nil {
+				return RebookingRequest{}, fmt.Errorf("decode understand request response: %w", err)
+			}
+			return result, nil
 		},
 		workflow.NodeConfig{},
 	)
+}
+
+func contentText(content *genai.Content) string {
+	var builder strings.Builder
+	for _, part := range content.Parts {
+		if part != nil && part.Text != "" {
+			builder.WriteString(part.Text)
+		}
+	}
+	return builder.String()
 }
 
 func newLoadReservationNode() workflow.Node {
