@@ -47,6 +47,7 @@ class ReservationRepository:
     async def get_segment_by_id(self, segment_id: UUID) -> ReservationSegment:
         statement = (
             select(ReservationSegment)
+            .options(joinedload(ReservationSegment.fare_class))
             .where(ReservationSegment.id == segment_id)
         )
         async with self._sessions() as session:

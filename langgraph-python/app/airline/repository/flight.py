@@ -3,7 +3,7 @@ from uuid import UUID
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.airline.models import Flight, FlightStatus
+from app.airline.models import FareClass, Flight, FlightFare, FlightStatus
 from app.airline.repository.errors import FlightNotFoundError
 from app.airline.schemas import (
     AvailableFareSchema,

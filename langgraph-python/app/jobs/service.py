@@ -9,10 +9,11 @@ logger = logging.getLogger(__name__)
 
 
 class JobService:
-    def __init__(self, redis, rabbitmq: RabbitMQ) -> None:
+    def __init__(self, redis, rabbitmq: RabbitMQ, runner=None) -> None:
         self._redis = redis
         self._rabbitmq = rabbitmq
         self._consumer_tag: str | None = None
+        self._runner = runner
 
     async def start(self) -> None:
         self._consumer_tag = await self._rabbitmq.consume(self.consume)
@@ -36,9 +37,23 @@ class JobService:
         try:
             job = Job(**json.loads(message.body.decode()))
             await set_job_status(self._redis, job.id, "processing")
-            logger.info("job consumed id=%s payload=%s", job.id, job.payload)
-            await set_job_status(self._redis, job.id, "completed")
+            if self._runner is None:
+                raise RuntimeError("agent runner is required")
+            result = await self._runner.run(job.payload)
+            if "__interrupt__" in result:
+                status = "waiting_for_confirmation"
+            else:
+                final = result.get("final")
+                final_status = (
+                    final.get("status") if isinstance(final, dict) else getattr(final, "status", None)
+                )
+                status = "failed" if final_status == "failed" else "completed"
+            await set_job_status(self._redis, job.id, status)
             await message.ack()
         except Exception:
             logger.exception("job processing failed")
+            try:
+                await set_job_status(self._redis, job.id, "failed")
+            except Exception:
+                logger.exception("failed to update job status")
             await message.nack(requeue=False)
