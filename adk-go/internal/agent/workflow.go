@@ -2,6 +2,9 @@ package agent
 
 import (
 	"fmt"
+	"log/slog"
+
+	"github.com/tokiou/agents-at-scale/internal/airline"
 
 	adkagent "google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/agent/workflowagent"
@@ -9,25 +12,25 @@ import (
 	"google.golang.org/adk/v2/workflow"
 )
 
-func newWorkflow(llm model.LLM) (adkagent.Agent, error) {
-	understandRequest := newUnderstandRequestNode(llm)
-	loadReservation := newLoadReservationNode()
-	searchAlternatives := newSearchAlternativesNode()
-	loadTravelCredits := newLoadTravelCreditsNode()
+func newWorkflow(logger *slog.Logger, llm model.LLM, airlineService *airline.Service) (adkagent.Agent, error) {
+	understandRequest := newUnderstandRequestNode(logger, llm)
+	getReservation := newGetReservationNode(logger, airlineService)
+	searchAlternatives := newSearchAlternativesNode(logger, airlineService)
+	getTravelCredits := newGetTravelCreditsNode(logger, airlineService)
 	contextJoin := workflow.NewJoinNode("join_context")
-	evaluateOptions := newEvaluateOptionsNode()
-	askConfirmation := newAskConfirmationNode()
-	validateChange := newValidateChangeNode()
-	explainInvalidChange := newExplainInvalidChangeNode()
-	executeRebooking := newExecuteRebookingNode()
-	verifyRebooking := newVerifyRebookingNode()
+	evaluateOptions := newEvaluateOptionsNode(logger, llm)
+	askConfirmation := newAskConfirmationNode(logger)
+	validateChange := newValidateChangeNode(logger, airlineService)
+	explainInvalidChange := newExplainInvalidChangeNode(logger)
+	executeRebooking := newExecuteRebookingNode(logger, airlineService)
+	verifyRebooking := newVerifyRebookingNode(logger, airlineService)
 
 	builder := workflow.NewEdgeBuilder()
 	builder.
 		Add(workflow.Start, understandRequest).
-		Add(understandRequest, loadReservation).
-		AddFanOut(loadReservation, searchAlternatives, loadTravelCredits).
-		AddFanIn(contextJoin, searchAlternatives, loadTravelCredits).
+		Add(understandRequest, getReservation).
+		AddFanOut(getReservation, searchAlternatives, getTravelCredits).
+		AddFanIn(contextJoin, searchAlternatives, getTravelCredits).
 		Add(contextJoin, evaluateOptions).
 		Add(evaluateOptions, askConfirmation).
 		Add(askConfirmation, validateChange).
@@ -38,10 +41,8 @@ func newWorkflow(llm model.LLM) (adkagent.Agent, error) {
 		AddRoute(explainInvalidChange, evaluateOptions, workflow.StringRoute("retry")).
 		Add(executeRebooking, verifyRebooking)
 
-		// TODO: validateChange must become an emitting/routing node and emit
-		// the route consumed by the conditional edges above. The placeholder
-		// intentionally does not select either branch. The invalid explanation
-		// will later emit "retry" when another evaluation should be attempted.
+		// The invalid branch emits "retry" with the original evaluation inputs
+		// so evaluate_options can be run again with fresh user-facing choices.
 	root, err := workflowagent.New(workflowagent.Config{
 		Name:        "airline_rebooking",
 		Description: "Handles airline reservation rebooking workflows.",

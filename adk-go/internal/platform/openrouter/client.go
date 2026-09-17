@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"iter"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -24,13 +25,14 @@ type Config struct {
 }
 
 type Client struct {
+	logger     *slog.Logger
 	deployment string
 	apiKey     string
 	baseURL    string
 	httpClient *http.Client
 }
 
-func New(cfg Config) (*Client, error) {
+func New(logger *slog.Logger, cfg Config) (*Client, error) {
 	if strings.TrimSpace(cfg.Deployment) == "" {
 		return nil, fmt.Errorf("openrouter deployment is required")
 	}
@@ -45,6 +47,7 @@ func New(cfg Config) (*Client, error) {
 		httpClient = http.DefaultClient
 	}
 	return &Client{
+		logger:     logger,
 		deployment: cfg.Deployment,
 		apiKey:     cfg.APIKey,
 		baseURL:    strings.TrimRight(cfg.BaseURL, "/"),
@@ -92,6 +95,7 @@ func (c *Client) generateContent(ctx context.Context, req *model.LLMRequest) (*m
 	if req == nil {
 		return nil, fmt.Errorf("openrouter request is required")
 	}
+	c.logger.Debug("openrouter request started", "model", c.deployment, "contents", len(req.Contents))
 	messages := make([]chatMessage, 0, len(req.Contents))
 	for _, content := range req.Contents {
 		if content == nil {
@@ -135,7 +139,8 @@ func (c *Client) generateContent(ctx context.Context, req *model.LLMRequest) (*m
 		return nil, fmt.Errorf("read OpenRouter response: %w", err)
 	}
 	if httpResponse.StatusCode < http.StatusOK || httpResponse.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("OpenRouter returned HTTP %d: %s", httpResponse.StatusCode, strings.TrimSpace(string(responseBody)))
+		c.logger.Error("openrouter request failed", "model", c.deployment, "status", httpResponse.StatusCode)
+		return nil, fmt.Errorf("OpenRouter returned HTTP %d", httpResponse.StatusCode)
 	}
 
 	var completion chatCompletionResponse

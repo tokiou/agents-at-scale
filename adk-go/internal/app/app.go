@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os/signal"
 	"syscall"
@@ -12,12 +13,17 @@ import (
 	"github.com/tokiou/agents-at-scale/internal/config"
 	"github.com/tokiou/agents-at-scale/internal/health"
 	"github.com/tokiou/agents-at-scale/internal/jobs"
+	platformlogger "github.com/tokiou/agents-at-scale/internal/platform/logger"
 	"github.com/tokiou/agents-at-scale/internal/platform/postgres"
 	"github.com/tokiou/agents-at-scale/internal/platform/rabbitmq"
 	redisplatform "github.com/tokiou/agents-at-scale/internal/platform/redis"
 )
 
 func Run(cfg config.Config) error {
+	logger := platformlogger.New(cfg.LogFormat, cfg.LogLevel)
+	slog.SetDefault(logger)
+	logger.Info("application starting", "address", cfg.Address)
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -28,22 +34,26 @@ func Run(cfg config.Config) error {
 		ConnMaxLifetime: cfg.ConnMaxLifetime,
 	})
 	if err != nil {
+		logger.Error("postgres initialization failed", "error", err)
 		return err
 	}
 	defer db.Close()
 	redisClient, err := redisplatform.New(ctx, cfg.RedisURL)
 	if err != nil {
+		logger.Error("redis initialization failed", "error", err)
 		return err
 	}
 	defer redisClient.Close()
 	rabbitClient, err := rabbitmq.New(cfg.RabbitMQURL, cfg.RabbitMQQueue)
 	if err != nil {
+		logger.Error("rabbitmq initialization failed", "error", err)
 		return err
 	}
 	defer rabbitClient.Close()
 
-	jobService := jobs.New(redisClient, rabbitClient)
+	jobService := jobs.New(logger, redisClient, rabbitClient)
 	if err := jobService.Start(ctx); err != nil {
+		logger.Error("job service failed to start", "error", err)
 		return err
 	}
 
@@ -62,8 +72,10 @@ func Run(cfg config.Config) error {
 
 	if err := server.ListenAndServe(); err != nil {
 		if errors.Is(err, http.ErrServerClosed) {
+			logger.Info("application stopped")
 			return nil
 		}
+		logger.Error("http server failed", "error", err)
 		return fmt.Errorf("run server: %w", err)
 	}
 	return nil

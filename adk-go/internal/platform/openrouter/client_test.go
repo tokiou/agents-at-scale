@@ -3,6 +3,8 @@ package openrouter
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -40,7 +42,7 @@ func TestGenerateContent(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := New(Config{
+	client, err := New(slog.New(slog.NewTextHandler(io.Discard, nil)), Config{
 		Deployment: "test-model",
 		APIKey:     "test-key",
 		BaseURL:    server.URL,
@@ -68,7 +70,7 @@ func TestGenerateContent(t *testing.T) {
 }
 
 func TestNewRequiresConfiguration(t *testing.T) {
-	if _, err := New(Config{}); err == nil {
+	if _, err := New(slog.New(slog.NewTextHandler(io.Discard, nil)), Config{}); err == nil {
 		t.Fatal("New() error = nil, want configuration error")
 	}
 }
