@@ -126,6 +126,7 @@ func (s *Service) process(ctx context.Context, delivery amqp091.Delivery) {
 	s.logger.Info("job consumed", "job_id", job.ID, "user_id", request.UserID, "session_id", request.SessionID)
 	var runErr error
 	var waiting bool
+	var interruptIDs []string
 	var events iter.Seq2[*session.Event, error]
 	if request.Resume != nil {
 		var payload any
@@ -142,6 +143,7 @@ func (s *Service) process(ctx context.Context, delivery amqp091.Delivery) {
 	for event, err := range events {
 		if event != nil && len(event.LongRunningToolIDs) > 0 {
 			waiting = true
+			interruptIDs = append(interruptIDs, event.LongRunningToolIDs...)
 		}
 		if err != nil {
 			if errors.Is(err, workflow.ErrNodeInterrupted) {
@@ -158,6 +160,7 @@ func (s *Service) process(ctx context.Context, delivery amqp091.Delivery) {
 	status := "completed"
 	if waiting {
 		status = "waiting"
+		s.logger.Info("job waiting for input", "job_id", job.ID, "interrupt_ids", interruptIDs)
 	}
 	if err := s.status.SetJobStatus(ctx, job.ID, status); err != nil {
 		s.fail(ctx, delivery, job.ID, "set completed status failed", err)
