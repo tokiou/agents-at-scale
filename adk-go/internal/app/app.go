@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -93,11 +94,17 @@ func Run(cfg config.Config) error {
 		return err
 	}
 
-	jobHandler := jobs.NewHandler(jobService)
+	airlineHandler := airline.NewHandler(func(ctx context.Context, payload json.RawMessage) (string, error) {
+		job, err := jobService.Publish(ctx, payload)
+		if err != nil {
+			return "", err
+		}
+		return job.ID, nil
+	})
 	healthHandler := health.NewHandler()
 	server := &http.Server{
 		Addr:    cfg.Address,
-		Handler: NewRouter(healthHandler, jobHandler),
+		Handler: NewRouter(healthHandler, airlineHandler),
 	}
 	go func() {
 		<-ctx.Done()
