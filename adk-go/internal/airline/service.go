@@ -4,14 +4,24 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
 var (
-	ErrInvalidSearchWindow   = errors.New("departure window is invalid")
-	ErrInvalidPassengerCount = errors.New("passenger count must be greater than zero")
-	ErrFareChangeNotAllowed  = errors.New("fare change is not allowed")
+	ErrInvalidSearchWindow     = errors.New("departure window is invalid")
+	ErrInvalidPassengerCount   = errors.New("passenger count must be greater than zero")
+	ErrFareChangeNotAllowed    = errors.New("fare change is not allowed")
+	ErrReservationNotConfirmed = errors.New("reservation is not confirmed")
+	ErrSegmentNotChangeable    = errors.New("reservation segment cannot be changed")
+	ErrTargetFlightUnavailable = errors.New("selected flight is unavailable")
+	ErrRouteMismatch           = errors.New("selected flight route does not match")
+	ErrCurrencyMismatch        = errors.New("selected fare currency does not match")
+	ErrTravelCreditInvalid     = errors.New("travel credit is invalid")
+	ErrRebookingVerification   = errors.New("rebooking verification failed")
+	ErrRebookingAlreadyApplied = errors.New("rebooking was already applied")
 )
 
 type Service struct {
@@ -20,6 +30,7 @@ type Service struct {
 	flights      FlightRepository
 	credits      TravelCreditRepository
 	changes      FlightChangeRepository
+	rebooking    RebookingRepository
 }
 
 type CustomerRepository interface {
@@ -44,20 +55,116 @@ type FlightChangeRepository interface {
 	GetBySegment(context.Context, uuid.UUID) ([]FlightChange, error)
 }
 
+type RebookingRepository interface {
+	GetSnapshot(context.Context, RebookingSelection) (*RebookingSnapshot, *TravelCredit, error)
+	Execute(context.Context, RebookingSelection) (*RebookingResult, error)
+	Verify(context.Context, RebookingSelection) (*RebookingResult, error)
+}
+
+type AirlineService interface {
+	GetAvailableTravelCredits(context.Context, uuid.UUID, string) ([]TravelCredit, error)
+	ValidateRebookingSelection(context.Context, RebookingSelection) (RebookingValidation, error)
+	ExecuteRebooking(context.Context, RebookingSelection) (*RebookingResult, error)
+	VerifyRebooking(context.Context, RebookingSelection) (*RebookingResult, error)
+}
+
 func NewService(
 	customers CustomerRepository,
 	reservations ReservationRepository,
 	flights FlightRepository,
 	credits TravelCreditRepository,
 	changes FlightChangeRepository,
+	rebooking ...RebookingRepository,
 ) *Service {
+	var rebookingRepository RebookingRepository
+	if len(rebooking) > 0 {
+		rebookingRepository = rebooking[0]
+	}
 	return &Service{
 		customers:    customers,
 		reservations: reservations,
 		flights:      flights,
 		credits:      credits,
 		changes:      changes,
+		rebooking:    rebookingRepository,
 	}
+}
+
+func ValidateRebookingSelection(selection RebookingSelection, snapshot RebookingSnapshot, credit *TravelCredit) (RebookingValidation, error) {
+	if selection.SegmentID == uuid.Nil || snapshot.SegmentID != selection.SegmentID {
+		return RebookingValidation{}, ErrSegmentNotChangeable
+	}
+	if snapshot.ReservationStatus != ReservationStatusConfirmed {
+		return RebookingValidation{}, ErrReservationNotConfirmed
+	}
+	if snapshot.SegmentStatus != SegmentStatusConfirmed && snapshot.SegmentStatus != SegmentStatusChanged {
+		return RebookingValidation{}, ErrSegmentNotChangeable
+	}
+	if snapshot.SegmentStatus == SegmentStatusChanged && snapshot.OldFlightID == selection.NewFlightID && snapshot.OldFareClassID == selection.NewFareClassID {
+		return RebookingValidation{}, ErrRebookingAlreadyApplied
+	}
+	if !snapshot.OldChangeAllowed {
+		return RebookingValidation{}, ErrFareChangeNotAllowed
+	}
+	if snapshot.TargetFlightID != selection.NewFlightID || snapshot.TargetFareClassID != selection.NewFareClassID || snapshot.TargetStatus != FlightStatusScheduled || snapshot.AvailableSeats < 1 {
+		return RebookingValidation{}, ErrTargetFlightUnavailable
+	}
+	if snapshot.OriginAirport != snapshot.TargetOrigin || snapshot.DestinationAirport != snapshot.TargetDestination {
+		return RebookingValidation{}, ErrRouteMismatch
+	}
+	if !snapshot.TargetChangeAllowed {
+		return RebookingValidation{}, ErrFareChangeNotAllowed
+	}
+	if snapshot.TargetCurrency != snapshot.OldCurrency {
+		return RebookingValidation{}, ErrCurrencyMismatch
+	}
+	if snapshot.PassengerCount <= 0 || snapshot.AvailableSeats < snapshot.PassengerCount {
+		return RebookingValidation{}, ErrTargetFlightUnavailable
+	}
+	if selection.TravelCreditID != uuid.Nil {
+		if credit == nil || credit.ID != selection.TravelCreditID || credit.CustomerID != snapshot.CustomerID || credit.Currency != snapshot.OldCurrency || credit.RemainingAmount.LessThan(selection.TravelCreditAmount) || selection.TravelCreditAmount.IsNegative() || selection.TravelCreditAmount.IsZero() || !credit.ExpiresAt.After(time.Now()) || (credit.Status != TravelCreditStatusAvailable && credit.Status != TravelCreditStatusPartiallyUsed) {
+			return RebookingValidation{}, ErrTravelCreditInvalid
+		}
+	} else if !selection.TravelCreditAmount.IsZero() {
+		return RebookingValidation{}, ErrTravelCreditInvalid
+	}
+	difference := snapshot.TargetPrice.Sub(snapshot.OldPrice)
+	amountDue := difference.Add(snapshot.TargetChangeFee)
+	if amountDue.IsNegative() {
+		amountDue = decimal.Zero
+	}
+	if amountDue.GreaterThan(selection.TravelCreditAmount) || selection.TravelCreditAmount.GreaterThan(amountDue) {
+		return RebookingValidation{}, ErrTravelCreditInvalid
+	}
+	return RebookingValidation{Selection: selection, ReservationID: snapshot.ReservationID, CustomerID: snapshot.CustomerID, OldFlightID: snapshot.OldFlightID, OldFareClassID: snapshot.OldFareClassID, NewFlightID: snapshot.TargetFlightID, NewFareClassID: snapshot.TargetFareClassID, NewPrice: snapshot.TargetPrice, FareDifference: difference, ChangeFee: snapshot.TargetChangeFee, AmountDue: amountDue, TravelCreditUsed: selection.TravelCreditAmount, Currency: snapshot.OldCurrency, PassengerCount: snapshot.PassengerCount}, nil
+}
+
+func (s *Service) ValidateRebookingSelection(ctx context.Context, selection RebookingSelection) (RebookingValidation, error) {
+	if s.rebooking == nil {
+		return RebookingValidation{}, errors.New("rebooking repository is required")
+	}
+	snapshot, credit, err := s.rebooking.GetSnapshot(ctx, selection)
+	if err != nil {
+		return RebookingValidation{}, fmt.Errorf("get rebooking state: %w", err)
+	}
+	if snapshot == nil {
+		return RebookingValidation{}, errors.New("get rebooking state: repository returned nil snapshot")
+	}
+	return ValidateRebookingSelection(selection, *snapshot, credit)
+}
+
+func (s *Service) ExecuteRebooking(ctx context.Context, selection RebookingSelection) (*RebookingResult, error) {
+	if s.rebooking == nil {
+		return nil, errors.New("rebooking repository is required")
+	}
+	return s.rebooking.Execute(ctx, selection)
+}
+
+func (s *Service) VerifyRebooking(ctx context.Context, selection RebookingSelection) (*RebookingResult, error) {
+	if s.rebooking == nil {
+		return nil, errors.New("rebooking repository is required")
+	}
+	return s.rebooking.Verify(ctx, selection)
 }
 
 func (s *Service) GetCustomer(ctx context.Context, customerID uuid.UUID) (*Customer, error) {

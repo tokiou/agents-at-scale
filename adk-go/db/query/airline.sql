@@ -89,3 +89,84 @@ SELECT id, reservation_segment_id, old_flight_id, new_flight_id,
 FROM flight_changes
 WHERE reservation_segment_id = $1
 ORDER BY created_at ASC;
+
+-- name: GetRebookingSegmentForUpdate :one
+SELECT rs.id AS segment_id, rs.reservation_id, rs.flight_id AS old_flight_id,
+       rs.fare_class_id AS old_fare_class_id, rs.status AS segment_status,
+       rs.price_paid, rs.currency AS segment_currency,
+       r.customer_id, r.status AS reservation_status,
+        old_f.status AS old_flight_status, old_f.origin_airport, old_f.destination_airport,
+        old_f.departure_at AS old_departure_at,
+        (SELECT COUNT(*) FROM reservation_passengers rp WHERE rp.reservation_id = rs.reservation_id) AS passenger_count,
+        old_fc.change_allowed AS old_change_allowed, old_fc.change_fee
+FROM reservation_segments rs
+JOIN reservations r ON r.id = rs.reservation_id
+JOIN flights old_f ON old_f.id = rs.flight_id
+JOIN fare_classes old_fc ON old_fc.id = rs.fare_class_id
+WHERE rs.id = $1
+FOR UPDATE OF rs, r;
+
+-- name: GetRebookingTargetForUpdate :one
+SELECT f.id AS flight_id, f.status AS flight_status,
+       f.origin_airport, f.destination_airport, f.departure_at,
+       ff.id AS flight_fare_id, ff.fare_class_id, ff.price,
+       ff.currency, ff.available_seats,
+       fc.change_allowed, fc.change_fee
+FROM flights f
+JOIN flight_fares ff ON ff.flight_id = f.id
+JOIN fare_classes fc ON fc.id = ff.fare_class_id
+WHERE f.id = $1 AND ff.fare_class_id = $2
+FOR UPDATE OF f, ff;
+
+-- name: GetTravelCreditForUpdate :one
+SELECT id, customer_id, original_amount, remaining_amount, currency, status, expires_at, created_at
+FROM travel_credits
+WHERE id = $1 AND customer_id = $2
+FOR UPDATE;
+
+-- name: DecrementFlightFareSeats :exec
+UPDATE flight_fares
+SET available_seats = available_seats - sqlc.arg(passenger_count)
+WHERE flight_id = sqlc.arg(flight_id) AND fare_class_id = sqlc.arg(fare_class_id)
+  AND available_seats >= sqlc.arg(passenger_count);
+
+-- name: IncrementFlightFareSeats :exec
+UPDATE flight_fares
+SET available_seats = available_seats + sqlc.arg(passenger_count)
+WHERE flight_id = sqlc.arg(flight_id) AND fare_class_id = sqlc.arg(fare_class_id);
+
+-- name: UpdateReservationTotal :exec
+UPDATE reservations
+SET total_amount = total_amount + $2, updated_at = NOW()
+WHERE id = $1;
+
+-- name: UpdateReservationSegment :exec
+UPDATE reservation_segments
+SET flight_id = $2, fare_class_id = $3, price_paid = $4,
+    status = 'CHANGED', currency = $5, updated_at = NOW()
+WHERE id = $1;
+
+-- name: ConsumeTravelCredit :exec
+UPDATE travel_credits
+SET remaining_amount = remaining_amount - $2,
+    status = CASE WHEN remaining_amount - $2 = 0 THEN 'USED' ELSE 'PARTIALLY_USED' END
+WHERE id = $1 AND remaining_amount >= $2;
+
+-- name: CreateFlightChange :one
+INSERT INTO flight_changes (
+    id, reservation_segment_id, old_flight_id, new_flight_id,
+    old_fare_class_id, new_fare_class_id, fare_difference, change_fee,
+    travel_credit_used, currency, created_at
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+RETURNING id, reservation_segment_id, old_flight_id, new_flight_id,
+          old_fare_class_id, new_fare_class_id, fare_difference, change_fee,
+          travel_credit_used, currency, created_at;
+
+-- name: GetRebookingResult :one
+SELECT rs.id AS segment_id, rs.reservation_id, rs.flight_id, rs.fare_class_id,
+       rs.status AS segment_status, rs.price_paid, rs.currency,
+       r.booking_reference
+FROM reservation_segments rs
+JOIN reservations r ON r.id = rs.reservation_id
+WHERE rs.id = $1;

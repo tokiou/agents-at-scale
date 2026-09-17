@@ -14,15 +14,15 @@ import (
 func newWorkflow(llm model.LLM, airlineService *airline.Service) (adkagent.Agent, error) {
 	understandRequest := newUnderstandRequestNode(llm)
 	getReservation := newGetReservationNode(airlineService)
-	searchAlternatives := newSearchAlternativesNode()
-	getTravelCredits := newGetTravelCreditsNode()
+	searchAlternatives := newSearchAlternativesNode(airlineService)
+	getTravelCredits := newGetTravelCreditsNode(airlineService)
 	contextJoin := workflow.NewJoinNode("join_context")
-	evaluateOptions := newEvaluateOptionsNode()
+	evaluateOptions := newEvaluateOptionsNode(llm)
 	askConfirmation := newAskConfirmationNode()
-	validateChange := newValidateChangeNode()
+	validateChange := newValidateChangeNode(airlineService)
 	explainInvalidChange := newExplainInvalidChangeNode()
-	executeRebooking := newExecuteRebookingNode()
-	verifyRebooking := newVerifyRebookingNode()
+	executeRebooking := newExecuteRebookingNode(airlineService)
+	verifyRebooking := newVerifyRebookingNode(airlineService)
 
 	builder := workflow.NewEdgeBuilder()
 	builder.
@@ -40,10 +40,8 @@ func newWorkflow(llm model.LLM, airlineService *airline.Service) (adkagent.Agent
 		AddRoute(explainInvalidChange, evaluateOptions, workflow.StringRoute("retry")).
 		Add(executeRebooking, verifyRebooking)
 
-		// TODO: validateChange must become an emitting/routing node and emit
-		// the route consumed by the conditional edges above. The placeholder
-		// intentionally does not select either branch. The invalid explanation
-		// will later emit "retry" when another evaluation should be attempted.
+		// The invalid branch emits "retry" with the original evaluation inputs
+		// so evaluate_options can be run again with fresh user-facing choices.
 	root, err := workflowagent.New(workflowagent.Config{
 		Name:        "airline_rebooking",
 		Description: "Handles airline reservation rebooking workflows.",

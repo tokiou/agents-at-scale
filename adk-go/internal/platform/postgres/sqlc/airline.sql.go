@@ -13,6 +13,96 @@ import (
 	decimal "github.com/shopspring/decimal"
 )
 
+const consumeTravelCredit = `-- name: ConsumeTravelCredit :exec
+UPDATE travel_credits
+SET remaining_amount = remaining_amount - $2,
+    status = CASE WHEN remaining_amount - $2 = 0 THEN 'USED' ELSE 'PARTIALLY_USED' END
+WHERE id = $1 AND remaining_amount >= $2
+`
+
+type ConsumeTravelCreditParams struct {
+	ID              uuid.UUID       `json:"id"`
+	RemainingAmount decimal.Decimal `json:"remaining_amount"`
+}
+
+func (q *Queries) ConsumeTravelCredit(ctx context.Context, arg ConsumeTravelCreditParams) error {
+	_, err := q.db.Exec(ctx, consumeTravelCredit, arg.ID, arg.RemainingAmount)
+	return err
+}
+
+const createFlightChange = `-- name: CreateFlightChange :one
+INSERT INTO flight_changes (
+    id, reservation_segment_id, old_flight_id, new_flight_id,
+    old_fare_class_id, new_fare_class_id, fare_difference, change_fee,
+    travel_credit_used, currency, created_at
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+RETURNING id, reservation_segment_id, old_flight_id, new_flight_id,
+          old_fare_class_id, new_fare_class_id, fare_difference, change_fee,
+          travel_credit_used, currency, created_at
+`
+
+type CreateFlightChangeParams struct {
+	ID                   uuid.UUID       `json:"id"`
+	ReservationSegmentID uuid.UUID       `json:"reservation_segment_id"`
+	OldFlightID          uuid.UUID       `json:"old_flight_id"`
+	NewFlightID          uuid.UUID       `json:"new_flight_id"`
+	OldFareClassID       uuid.UUID       `json:"old_fare_class_id"`
+	NewFareClassID       uuid.UUID       `json:"new_fare_class_id"`
+	FareDifference       decimal.Decimal `json:"fare_difference"`
+	ChangeFee            decimal.Decimal `json:"change_fee"`
+	TravelCreditUsed     decimal.Decimal `json:"travel_credit_used"`
+	Currency             string          `json:"currency"`
+}
+
+func (q *Queries) CreateFlightChange(ctx context.Context, arg CreateFlightChangeParams) (FlightChange, error) {
+	row := q.db.QueryRow(ctx, createFlightChange,
+		arg.ID,
+		arg.ReservationSegmentID,
+		arg.OldFlightID,
+		arg.NewFlightID,
+		arg.OldFareClassID,
+		arg.NewFareClassID,
+		arg.FareDifference,
+		arg.ChangeFee,
+		arg.TravelCreditUsed,
+		arg.Currency,
+	)
+	var i FlightChange
+	err := row.Scan(
+		&i.ID,
+		&i.ReservationSegmentID,
+		&i.OldFlightID,
+		&i.NewFlightID,
+		&i.OldFareClassID,
+		&i.NewFareClassID,
+		&i.FareDifference,
+		&i.ChangeFee,
+		&i.TravelCreditUsed,
+		&i.Currency,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const decrementFlightFareSeats = `-- name: DecrementFlightFareSeats :exec
+UPDATE flight_fares
+SET available_seats = available_seats - $1
+WHERE flight_id = $2 AND fare_class_id = $3
+  AND available_seats >= $1
+`
+
+type DecrementFlightFareSeatsParams struct {
+	PassengerCount int32     `json:"passenger_count"`
+	FlightID       uuid.UUID `json:"flight_id"`
+	FareClassID    uuid.UUID `json:"fare_class_id"`
+}
+
+func (q *Queries) DecrementFlightFareSeats(ctx context.Context, arg DecrementFlightFareSeatsParams) error {
+	_, err := q.db.Exec(ctx, decrementFlightFareSeats, arg.PassengerCount, arg.FlightID, arg.FareClassID)
+	return err
+}
+
 const getAvailableTravelCredits = `-- name: GetAvailableTravelCredits :many
 SELECT id, customer_id, original_amount, remaining_amount, currency, status, expires_at, created_at
 FROM travel_credits
@@ -177,6 +267,155 @@ func (q *Queries) GetPassengersByReservation(ctx context.Context, reservationID 
 		return nil, err
 	}
 	return items, nil
+}
+
+const getRebookingResult = `-- name: GetRebookingResult :one
+SELECT rs.id AS segment_id, rs.reservation_id, rs.flight_id, rs.fare_class_id,
+       rs.status AS segment_status, rs.price_paid, rs.currency,
+       r.booking_reference
+FROM reservation_segments rs
+JOIN reservations r ON r.id = rs.reservation_id
+WHERE rs.id = $1
+`
+
+type GetRebookingResultRow struct {
+	SegmentID        uuid.UUID       `json:"segment_id"`
+	ReservationID    uuid.UUID       `json:"reservation_id"`
+	FlightID         uuid.UUID       `json:"flight_id"`
+	FareClassID      uuid.UUID       `json:"fare_class_id"`
+	SegmentStatus    SegmentStatus   `json:"segment_status"`
+	PricePaid        decimal.Decimal `json:"price_paid"`
+	Currency         string          `json:"currency"`
+	BookingReference string          `json:"booking_reference"`
+}
+
+func (q *Queries) GetRebookingResult(ctx context.Context, id uuid.UUID) (GetRebookingResultRow, error) {
+	row := q.db.QueryRow(ctx, getRebookingResult, id)
+	var i GetRebookingResultRow
+	err := row.Scan(
+		&i.SegmentID,
+		&i.ReservationID,
+		&i.FlightID,
+		&i.FareClassID,
+		&i.SegmentStatus,
+		&i.PricePaid,
+		&i.Currency,
+		&i.BookingReference,
+	)
+	return i, err
+}
+
+const getRebookingSegmentForUpdate = `-- name: GetRebookingSegmentForUpdate :one
+SELECT rs.id AS segment_id, rs.reservation_id, rs.flight_id AS old_flight_id,
+       rs.fare_class_id AS old_fare_class_id, rs.status AS segment_status,
+       rs.price_paid, rs.currency AS segment_currency,
+       r.customer_id, r.status AS reservation_status,
+        old_f.status AS old_flight_status, old_f.origin_airport, old_f.destination_airport,
+        old_f.departure_at AS old_departure_at,
+        (SELECT COUNT(*) FROM reservation_passengers rp WHERE rp.reservation_id = rs.reservation_id) AS passenger_count,
+        old_fc.change_allowed AS old_change_allowed, old_fc.change_fee
+FROM reservation_segments rs
+JOIN reservations r ON r.id = rs.reservation_id
+JOIN flights old_f ON old_f.id = rs.flight_id
+JOIN fare_classes old_fc ON old_fc.id = rs.fare_class_id
+WHERE rs.id = $1
+FOR UPDATE OF rs, r
+`
+
+type GetRebookingSegmentForUpdateRow struct {
+	SegmentID          uuid.UUID          `json:"segment_id"`
+	ReservationID      uuid.UUID          `json:"reservation_id"`
+	OldFlightID        uuid.UUID          `json:"old_flight_id"`
+	OldFareClassID     uuid.UUID          `json:"old_fare_class_id"`
+	SegmentStatus      SegmentStatus      `json:"segment_status"`
+	PricePaid          decimal.Decimal    `json:"price_paid"`
+	SegmentCurrency    string             `json:"segment_currency"`
+	CustomerID         uuid.UUID          `json:"customer_id"`
+	ReservationStatus  ReservationStatus  `json:"reservation_status"`
+	OldFlightStatus    FlightStatus       `json:"old_flight_status"`
+	OriginAirport      string             `json:"origin_airport"`
+	DestinationAirport string             `json:"destination_airport"`
+	OldDepartureAt     pgtype.Timestamptz `json:"old_departure_at"`
+	PassengerCount     int64              `json:"passenger_count"`
+	OldChangeAllowed   bool               `json:"old_change_allowed"`
+	ChangeFee          decimal.Decimal    `json:"change_fee"`
+}
+
+func (q *Queries) GetRebookingSegmentForUpdate(ctx context.Context, id uuid.UUID) (GetRebookingSegmentForUpdateRow, error) {
+	row := q.db.QueryRow(ctx, getRebookingSegmentForUpdate, id)
+	var i GetRebookingSegmentForUpdateRow
+	err := row.Scan(
+		&i.SegmentID,
+		&i.ReservationID,
+		&i.OldFlightID,
+		&i.OldFareClassID,
+		&i.SegmentStatus,
+		&i.PricePaid,
+		&i.SegmentCurrency,
+		&i.CustomerID,
+		&i.ReservationStatus,
+		&i.OldFlightStatus,
+		&i.OriginAirport,
+		&i.DestinationAirport,
+		&i.OldDepartureAt,
+		&i.PassengerCount,
+		&i.OldChangeAllowed,
+		&i.ChangeFee,
+	)
+	return i, err
+}
+
+const getRebookingTargetForUpdate = `-- name: GetRebookingTargetForUpdate :one
+SELECT f.id AS flight_id, f.status AS flight_status,
+       f.origin_airport, f.destination_airport, f.departure_at,
+       ff.id AS flight_fare_id, ff.fare_class_id, ff.price,
+       ff.currency, ff.available_seats,
+       fc.change_allowed, fc.change_fee
+FROM flights f
+JOIN flight_fares ff ON ff.flight_id = f.id
+JOIN fare_classes fc ON fc.id = ff.fare_class_id
+WHERE f.id = $1 AND ff.fare_class_id = $2
+FOR UPDATE OF f, ff
+`
+
+type GetRebookingTargetForUpdateParams struct {
+	ID          uuid.UUID `json:"id"`
+	FareClassID uuid.UUID `json:"fare_class_id"`
+}
+
+type GetRebookingTargetForUpdateRow struct {
+	FlightID           uuid.UUID          `json:"flight_id"`
+	FlightStatus       FlightStatus       `json:"flight_status"`
+	OriginAirport      string             `json:"origin_airport"`
+	DestinationAirport string             `json:"destination_airport"`
+	DepartureAt        pgtype.Timestamptz `json:"departure_at"`
+	FlightFareID       uuid.UUID          `json:"flight_fare_id"`
+	FareClassID        uuid.UUID          `json:"fare_class_id"`
+	Price              decimal.Decimal    `json:"price"`
+	Currency           string             `json:"currency"`
+	AvailableSeats     int32              `json:"available_seats"`
+	ChangeAllowed      bool               `json:"change_allowed"`
+	ChangeFee          decimal.Decimal    `json:"change_fee"`
+}
+
+func (q *Queries) GetRebookingTargetForUpdate(ctx context.Context, arg GetRebookingTargetForUpdateParams) (GetRebookingTargetForUpdateRow, error) {
+	row := q.db.QueryRow(ctx, getRebookingTargetForUpdate, arg.ID, arg.FareClassID)
+	var i GetRebookingTargetForUpdateRow
+	err := row.Scan(
+		&i.FlightID,
+		&i.FlightStatus,
+		&i.OriginAirport,
+		&i.DestinationAirport,
+		&i.DepartureAt,
+		&i.FlightFareID,
+		&i.FareClassID,
+		&i.Price,
+		&i.Currency,
+		&i.AvailableSeats,
+		&i.ChangeAllowed,
+		&i.ChangeFee,
+	)
+	return i, err
 }
 
 const getReservationByBookingReference = `-- name: GetReservationByBookingReference :one
@@ -344,6 +583,51 @@ func (q *Queries) GetSegmentDetailsByReservation(ctx context.Context, reservatio
 	return items, nil
 }
 
+const getTravelCreditForUpdate = `-- name: GetTravelCreditForUpdate :one
+SELECT id, customer_id, original_amount, remaining_amount, currency, status, expires_at, created_at
+FROM travel_credits
+WHERE id = $1 AND customer_id = $2
+FOR UPDATE
+`
+
+type GetTravelCreditForUpdateParams struct {
+	ID         uuid.UUID `json:"id"`
+	CustomerID uuid.UUID `json:"customer_id"`
+}
+
+func (q *Queries) GetTravelCreditForUpdate(ctx context.Context, arg GetTravelCreditForUpdateParams) (TravelCredit, error) {
+	row := q.db.QueryRow(ctx, getTravelCreditForUpdate, arg.ID, arg.CustomerID)
+	var i TravelCredit
+	err := row.Scan(
+		&i.ID,
+		&i.CustomerID,
+		&i.OriginalAmount,
+		&i.RemainingAmount,
+		&i.Currency,
+		&i.Status,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const incrementFlightFareSeats = `-- name: IncrementFlightFareSeats :exec
+UPDATE flight_fares
+SET available_seats = available_seats + $1
+WHERE flight_id = $2 AND fare_class_id = $3
+`
+
+type IncrementFlightFareSeatsParams struct {
+	PassengerCount int32     `json:"passenger_count"`
+	FlightID       uuid.UUID `json:"flight_id"`
+	FareClassID    uuid.UUID `json:"fare_class_id"`
+}
+
+func (q *Queries) IncrementFlightFareSeats(ctx context.Context, arg IncrementFlightFareSeatsParams) error {
+	_, err := q.db.Exec(ctx, incrementFlightFareSeats, arg.PassengerCount, arg.FlightID, arg.FareClassID)
+	return err
+}
+
 const searchAvailableFlights = `-- name: SearchAvailableFlights :many
 SELECT
     f.id AS flight_id, f.flight_number, f.origin_airport, f.destination_airport,
@@ -450,4 +734,46 @@ func (q *Queries) SearchAvailableFlights(ctx context.Context, arg SearchAvailabl
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateReservationSegment = `-- name: UpdateReservationSegment :exec
+UPDATE reservation_segments
+SET flight_id = $2, fare_class_id = $3, price_paid = $4,
+    status = 'CHANGED', currency = $5, updated_at = NOW()
+WHERE id = $1
+`
+
+type UpdateReservationSegmentParams struct {
+	ID          uuid.UUID       `json:"id"`
+	FlightID    uuid.UUID       `json:"flight_id"`
+	FareClassID uuid.UUID       `json:"fare_class_id"`
+	PricePaid   decimal.Decimal `json:"price_paid"`
+	Currency    string          `json:"currency"`
+}
+
+func (q *Queries) UpdateReservationSegment(ctx context.Context, arg UpdateReservationSegmentParams) error {
+	_, err := q.db.Exec(ctx, updateReservationSegment,
+		arg.ID,
+		arg.FlightID,
+		arg.FareClassID,
+		arg.PricePaid,
+		arg.Currency,
+	)
+	return err
+}
+
+const updateReservationTotal = `-- name: UpdateReservationTotal :exec
+UPDATE reservations
+SET total_amount = total_amount + $2, updated_at = NOW()
+WHERE id = $1
+`
+
+type UpdateReservationTotalParams struct {
+	ID          uuid.UUID       `json:"id"`
+	TotalAmount decimal.Decimal `json:"total_amount"`
+}
+
+func (q *Queries) UpdateReservationTotal(ctx context.Context, arg UpdateReservationTotalParams) error {
+	_, err := q.db.Exec(ctx, updateReservationTotal, arg.ID, arg.TotalAmount)
+	return err
 }
