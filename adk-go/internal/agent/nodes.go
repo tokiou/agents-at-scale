@@ -18,11 +18,10 @@ import (
 	"google.golang.org/genai"
 )
 
-func newUnderstandRequestNode(llm model.LLM) workflow.Node {
+func newUnderstandRequestNode(logger *slog.Logger, llm model.LLM) workflow.Node {
 	return workflow.NewFunctionNode(
 		"understand_request",
 		func(ctx adkagent.Context, input string) (RebookingRequest, error) {
-			logger := slog.Default()
 			logger.Info("understand request started", "input_length", len(input))
 			if llm == nil {
 				logger.Error("understand request model is missing")
@@ -72,11 +71,10 @@ func contentText(content *genai.Content) string {
 	return builder.String()
 }
 
-func newGetReservationNode(service *airline.Service) workflow.Node {
+func newGetReservationNode(logger *slog.Logger, service *airline.Service) workflow.Node {
 	return workflow.NewFunctionNode(
 		"get_reservation",
 		func(ctx adkagent.Context, input RebookingRequest) (ReservationContext, error) {
-			logger := slog.Default()
 			logger.Info("get reservation started", "has_booking_reference", input.BookingReference != "")
 			if service == nil {
 				logger.Error("get reservation service is missing")
@@ -101,11 +99,10 @@ func newGetReservationNode(service *airline.Service) workflow.Node {
 	)
 }
 
-func newSearchAlternativesNode(service *airline.Service) workflow.Node {
+func newSearchAlternativesNode(logger *slog.Logger, service *airline.Service) workflow.Node {
 	return workflow.NewFunctionNode(
 		"search_alternatives",
 		func(ctx adkagent.Context, input ReservationContext) (SearchAlternativesResult, error) {
-			logger := slog.Default()
 			logger.Info("search alternatives started")
 			if service == nil {
 				return SearchAlternativesResult{}, fmt.Errorf("search alternatives service is required")
@@ -156,11 +153,10 @@ func reservationSegment(input ReservationContext) (airline.ReservationSegmentDet
 	return input.Reservation.Segments[0], nil
 }
 
-func newGetTravelCreditsNode(service *airline.Service) workflow.Node {
+func newGetTravelCreditsNode(logger *slog.Logger, service *airline.Service) workflow.Node {
 	return workflow.NewFunctionNode(
 		"get_travel_credits",
 		func(ctx adkagent.Context, input ReservationContext) (TravelCreditsResult, error) {
-			logger := slog.Default()
 			logger.Info("get travel credits started")
 			if service == nil {
 				return TravelCreditsResult{}, fmt.Errorf("get travel credits service is required")
@@ -184,11 +180,10 @@ func newGetTravelCreditsNode(service *airline.Service) workflow.Node {
 	)
 }
 
-func newEvaluateOptionsNode(llm model.LLM) workflow.Node {
+func newEvaluateOptionsNode(logger *slog.Logger, llm model.LLM) workflow.Node {
 	return workflow.NewFunctionNode(
 		"evaluate_options",
 		func(ctx adkagent.Context, input map[string]any) (EvaluationResult, error) {
-			logger := slog.Default()
 			logger.Info("evaluate options started")
 			if llm == nil {
 				logger.Error("evaluate options model is missing")
@@ -271,12 +266,11 @@ func generateModelResponse(ctx adkagent.Context, llm model.LLM, request *model.L
 	return response, nil
 }
 
-func newAskConfirmationNode() workflow.Node {
+func newAskConfirmationNode(logger *slog.Logger) workflow.Node {
 	rerunOnResume := true
 	return workflow.NewEmittingFunctionNode(
 		"ask_confirmation",
 		func(ctx adkagent.Context, input EvaluationResult, emit func(*session.Event) error) (ConfirmationResult, error) {
-			logger := slog.Default()
 			logger.Info("confirmation requested", "options", len(input.Options))
 			reply, err := workflow.ResumeOrRequestInput(ctx, emit, session.RequestInput{
 				InterruptID: "confirm-rebooking-" + ctx.InvocationID(),
@@ -304,11 +298,10 @@ func newAskConfirmationNode() workflow.Node {
 	)
 }
 
-func newValidateChangeNode(service *airline.Service) workflow.Node {
+func newValidateChangeNode(logger *slog.Logger, service *airline.Service) workflow.Node {
 	return workflow.NewEmittingFunctionNode(
 		"validate_change",
 		func(ctx adkagent.Context, input ConfirmationResult, emit func(*session.Event) error) (any, error) {
-			logger := slog.Default()
 			logger.Info("validate change started", "confirmed", input.Confirmed)
 			if service == nil {
 				return nil, fmt.Errorf("validate change service is required")
@@ -368,11 +361,11 @@ func selectionIsOffered(selection airline.RebookingSelection, options []airline.
 	return false
 }
 
-func newExplainInvalidChangeNode() workflow.Node {
+func newExplainInvalidChangeNode(logger *slog.Logger) workflow.Node {
 	return workflow.NewEmittingFunctionNode(
 		"explain_invalid_change",
 		func(ctx adkagent.Context, input ValidationResult, emit func(*session.Event) error) (any, error) {
-			slog.Default().Warn("explaining invalid change", "reason", input.Reason, "user_declined", input.UserDeclined)
+			logger.Warn("explaining invalid change", "reason", input.Reason, "user_declined", input.UserDeclined)
 			result := FinalResult{Message: "The selected rebooking is no longer valid: " + input.Reason}
 			event := session.NewEvent(ctx, ctx.InvocationID())
 			event.Content = genai.NewContentFromText(result.Message, genai.RoleModel)
@@ -391,11 +384,10 @@ func newExplainInvalidChangeNode() workflow.Node {
 	)
 }
 
-func newExecuteRebookingNode(service *airline.Service) workflow.Node {
+func newExecuteRebookingNode(logger *slog.Logger, service *airline.Service) workflow.Node {
 	return workflow.NewFunctionNode(
 		"execute_rebooking",
 		func(ctx adkagent.Context, input ValidationResult) (RebookingExecutionResult, error) {
-			logger := slog.Default()
 			logger.Info("execute rebooking started")
 			if service == nil {
 				return RebookingExecutionResult{}, fmt.Errorf("execute rebooking service is required")
@@ -412,11 +404,10 @@ func newExecuteRebookingNode(service *airline.Service) workflow.Node {
 	)
 }
 
-func newVerifyRebookingNode(service *airline.Service) workflow.Node {
+func newVerifyRebookingNode(logger *slog.Logger, service *airline.Service) workflow.Node {
 	return workflow.NewFunctionNode(
 		"verify_rebooking",
 		func(ctx adkagent.Context, input RebookingExecutionResult) (FinalResult, error) {
-			logger := slog.Default()
 			logger.Info("verify rebooking started")
 			if service == nil {
 				return FinalResult{}, fmt.Errorf("verify rebooking service is required")

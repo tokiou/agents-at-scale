@@ -2,6 +2,8 @@ package airline
 
 import (
 	"errors"
+	"io"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -55,7 +57,7 @@ func TestValidateRebookingSelectionRejectsStaleInventoryAndInvalidCredit(t *test
 }
 
 func TestSearchRebookingOptionsRejectsInvalidInput(t *testing.T) {
-	service := NewService(nil, nil, nil, nil, nil)
+	service := NewService(slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil, nil, nil)
 	now := time.Now()
 
 	if _, err := service.SearchRebookingOptions(nil, SearchRebookingOptionsInput{

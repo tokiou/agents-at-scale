@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/tokiou/agents-at-scale/internal/airline"
 
@@ -11,18 +12,18 @@ import (
 	"google.golang.org/adk/v2/workflow"
 )
 
-func newWorkflow(llm model.LLM, airlineService *airline.Service) (adkagent.Agent, error) {
-	understandRequest := newUnderstandRequestNode(llm)
-	getReservation := newGetReservationNode(airlineService)
-	searchAlternatives := newSearchAlternativesNode(airlineService)
-	getTravelCredits := newGetTravelCreditsNode(airlineService)
+func newWorkflow(logger *slog.Logger, llm model.LLM, airlineService *airline.Service) (adkagent.Agent, error) {
+	understandRequest := newUnderstandRequestNode(logger, llm)
+	getReservation := newGetReservationNode(logger, airlineService)
+	searchAlternatives := newSearchAlternativesNode(logger, airlineService)
+	getTravelCredits := newGetTravelCreditsNode(logger, airlineService)
 	contextJoin := workflow.NewJoinNode("join_context")
-	evaluateOptions := newEvaluateOptionsNode(llm)
-	askConfirmation := newAskConfirmationNode()
-	validateChange := newValidateChangeNode(airlineService)
-	explainInvalidChange := newExplainInvalidChangeNode()
-	executeRebooking := newExecuteRebookingNode(airlineService)
-	verifyRebooking := newVerifyRebookingNode(airlineService)
+	evaluateOptions := newEvaluateOptionsNode(logger, llm)
+	askConfirmation := newAskConfirmationNode(logger)
+	validateChange := newValidateChangeNode(logger, airlineService)
+	explainInvalidChange := newExplainInvalidChangeNode(logger)
+	executeRebooking := newExecuteRebookingNode(logger, airlineService)
+	verifyRebooking := newVerifyRebookingNode(logger, airlineService)
 
 	builder := workflow.NewEdgeBuilder()
 	builder.

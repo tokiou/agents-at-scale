@@ -20,9 +20,9 @@ import (
 )
 
 func Run(cfg config.Config) error {
-	appLogger := platformlogger.New(cfg.LogFormat, cfg.LogLevel)
-	slog.SetDefault(appLogger)
-	appLogger.Info("application starting", "address", cfg.Address)
+	logger := platformlogger.New(cfg.LogFormat, cfg.LogLevel)
+	slog.SetDefault(logger)
+	logger.Info("application starting", "address", cfg.Address)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -34,26 +34,26 @@ func Run(cfg config.Config) error {
 		ConnMaxLifetime: cfg.ConnMaxLifetime,
 	})
 	if err != nil {
-		appLogger.Error("postgres initialization failed", "error", err)
+		logger.Error("postgres initialization failed", "error", err)
 		return err
 	}
 	defer db.Close()
 	redisClient, err := redisplatform.New(ctx, cfg.RedisURL)
 	if err != nil {
-		appLogger.Error("redis initialization failed", "error", err)
+		logger.Error("redis initialization failed", "error", err)
 		return err
 	}
 	defer redisClient.Close()
 	rabbitClient, err := rabbitmq.New(cfg.RabbitMQURL, cfg.RabbitMQQueue)
 	if err != nil {
-		appLogger.Error("rabbitmq initialization failed", "error", err)
+		logger.Error("rabbitmq initialization failed", "error", err)
 		return err
 	}
 	defer rabbitClient.Close()
 
-	jobService := jobs.New(redisClient, rabbitClient)
+	jobService := jobs.New(logger, redisClient, rabbitClient)
 	if err := jobService.Start(ctx); err != nil {
-		appLogger.Error("job service failed to start", "error", err)
+		logger.Error("job service failed to start", "error", err)
 		return err
 	}
 
@@ -72,10 +72,10 @@ func Run(cfg config.Config) error {
 
 	if err := server.ListenAndServe(); err != nil {
 		if errors.Is(err, http.ErrServerClosed) {
-			appLogger.Info("application stopped")
+			logger.Info("application stopped")
 			return nil
 		}
-		appLogger.Error("http server failed", "error", err)
+		logger.Error("http server failed", "error", err)
 		return fmt.Errorf("run server: %w", err)
 	}
 	return nil

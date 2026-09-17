@@ -13,12 +13,13 @@ import (
 )
 
 type Service struct {
+	logger *slog.Logger
 	redis  *redis.Client
 	rabbit *rabbitmq.Client
 }
 
-func New(redisClient *redis.Client, rabbitClient *rabbitmq.Client) *Service {
-	return &Service{redis: redisClient, rabbit: rabbitClient}
+func New(logger *slog.Logger, redisClient *redis.Client, rabbitClient *rabbitmq.Client) *Service {
+	return &Service{logger: logger, redis: redisClient, rabbit: rabbitClient}
 }
 
 func (s *Service) Start(ctx context.Context) error {
@@ -56,15 +57,15 @@ func (s *Service) consume(ctx context.Context, deliveries <-chan amqp091.Deliver
 			}
 			var job rabbitmq.Job
 			if err := json.Unmarshal(delivery.Body, &job); err != nil {
-				slog.Default().Error("invalid job", "error", err)
+				s.logger.Error("invalid job", "error", err)
 				_ = delivery.Nack(false, false)
 				continue
 			}
 			_ = redisplatform.SetJobStatus(ctx, s.redis, job.ID, "processing")
-			slog.Default().Info("job consumed", "job_id", job.ID)
+			s.logger.Info("job consumed", "job_id", job.ID)
 			_ = redisplatform.SetJobStatus(ctx, s.redis, job.ID, "completed")
 			if err := delivery.Ack(false); err != nil {
-				slog.Default().Error("ack job failed", "job_id", job.ID, "error", err)
+				s.logger.Error("ack job failed", "job_id", job.ID, "error", err)
 			}
 		}
 	}
