@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"iter"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -92,6 +93,7 @@ func (c *Client) generateContent(ctx context.Context, req *model.LLMRequest) (*m
 	if req == nil {
 		return nil, fmt.Errorf("openrouter request is required")
 	}
+	slog.Default().Debug("openrouter request started", "model", c.deployment, "contents", len(req.Contents))
 	messages := make([]chatMessage, 0, len(req.Contents))
 	for _, content := range req.Contents {
 		if content == nil {
@@ -135,7 +137,8 @@ func (c *Client) generateContent(ctx context.Context, req *model.LLMRequest) (*m
 		return nil, fmt.Errorf("read OpenRouter response: %w", err)
 	}
 	if httpResponse.StatusCode < http.StatusOK || httpResponse.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("OpenRouter returned HTTP %d: %s", httpResponse.StatusCode, strings.TrimSpace(string(responseBody)))
+		slog.Default().Error("openrouter request failed", "model", c.deployment, "status", httpResponse.StatusCode)
+		return nil, fmt.Errorf("OpenRouter returned HTTP %d", httpResponse.StatusCode)
 	}
 
 	var completion chatCompletionResponse

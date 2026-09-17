@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"iter"
+	"log/slog"
 
 	"google.golang.org/genai"
 
@@ -31,5 +32,20 @@ func NewAgentRunner(rootAgent adkagent.Agent, sessionService session.Service) (*
 
 func (r *AgentRunner) Run(ctx context.Context, userID, sessionID, message string) iter.Seq2[*session.Event, error] {
 	content := genai.NewContentFromText(message, genai.RoleUser)
-	return r.runner.Run(ctx, userID, sessionID, content, adkagent.RunConfig{})
+	return func(yield func(*session.Event, error) bool) {
+		logger := slog.Default()
+		logger.Info("agent run started", "user_id", userID, "session_id", sessionID, "message_length", len(message))
+		eventCount := 0
+		for event, err := range r.runner.Run(ctx, userID, sessionID, content, adkagent.RunConfig{}) {
+			if err != nil {
+				logger.Error("agent run failed", "user_id", userID, "session_id", sessionID, "error", err)
+			} else if event != nil {
+				eventCount++
+			}
+			if !yield(event, err) {
+				return
+			}
+		}
+		logger.Info("agent run finished", "user_id", userID, "session_id", sessionID, "events", eventCount)
+	}
 }

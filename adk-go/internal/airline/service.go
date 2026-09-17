@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -140,6 +141,7 @@ func ValidateRebookingSelection(selection RebookingSelection, snapshot Rebooking
 }
 
 func (s *Service) ValidateRebookingSelection(ctx context.Context, selection RebookingSelection) (RebookingValidation, error) {
+	slog.Default().Debug("validating rebooking selection", "segment_id", selection.SegmentID, "new_flight_id", selection.NewFlightID)
 	if s.rebooking == nil {
 		return RebookingValidation{}, errors.New("rebooking repository is required")
 	}
@@ -154,6 +156,7 @@ func (s *Service) ValidateRebookingSelection(ctx context.Context, selection Rebo
 }
 
 func (s *Service) ExecuteRebooking(ctx context.Context, selection RebookingSelection) (*RebookingResult, error) {
+	slog.Default().Info("executing rebooking", "segment_id", selection.SegmentID, "new_flight_id", selection.NewFlightID)
 	if s.rebooking == nil {
 		return nil, errors.New("rebooking repository is required")
 	}
@@ -161,6 +164,7 @@ func (s *Service) ExecuteRebooking(ctx context.Context, selection RebookingSelec
 }
 
 func (s *Service) VerifyRebooking(ctx context.Context, selection RebookingSelection) (*RebookingResult, error) {
+	slog.Default().Debug("verifying rebooking", "segment_id", selection.SegmentID, "new_flight_id", selection.NewFlightID)
 	if s.rebooking == nil {
 		return nil, errors.New("rebooking repository is required")
 	}

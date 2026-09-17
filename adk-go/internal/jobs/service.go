@@ -3,7 +3,7 @@ package jobs
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 
 	"github.com/google/uuid"
 	"github.com/rabbitmq/amqp091-go"
@@ -56,15 +56,15 @@ func (s *Service) consume(ctx context.Context, deliveries <-chan amqp091.Deliver
 			}
 			var job rabbitmq.Job
 			if err := json.Unmarshal(delivery.Body, &job); err != nil {
-				log.Printf("invalid job: %v", err)
+				slog.Default().Error("invalid job", "error", err)
 				_ = delivery.Nack(false, false)
 				continue
 			}
 			_ = redisplatform.SetJobStatus(ctx, s.redis, job.ID, "processing")
-			log.Printf("job consumed id=%s payload=%s", job.ID, job.Payload)
+			slog.Default().Info("job consumed", "job_id", job.ID)
 			_ = redisplatform.SetJobStatus(ctx, s.redis, job.ID, "completed")
 			if err := delivery.Ack(false); err != nil {
-				log.Printf("ack job id=%s: %v", job.ID, err)
+				slog.Default().Error("ack job failed", "job_id", job.ID, "error", err)
 			}
 		}
 	}

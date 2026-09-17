@@ -7,6 +7,8 @@ import (
 
 type Config struct {
 	Address           string
+	LogFormat         string
+	LogLevel          string
 	OpenRouterModel   string
 	OpenRouterAPIKey  string
 	OpenRouterBaseURL string
@@ -27,6 +29,8 @@ func Load() Config {
 
 	return Config{
 		Address:           address,
+		LogFormat:         envOrDefault("LOG_FORMAT", "text"),
+		LogLevel:          envOrDefault("LOG_LEVEL", "info"),
 		OpenRouterModel:   envOrDefault("OPENROUTER_DEPLOYMENT", ""),
 		OpenRouterAPIKey:  envOrDefault("OPENROUTER_API_KEY", ""),
 		OpenRouterBaseURL: envOrDefault("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
