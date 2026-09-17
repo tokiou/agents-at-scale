@@ -60,12 +60,12 @@ func contentText(content *genai.Content) string {
 	return builder.String()
 }
 
-func newLoadReservationNode() workflow.Node {
+func newGetReservationNode() workflow.Node {
 	return workflow.NewFunctionNode(
-		"load_reservation",
+		"get_reservation",
 		func(ctx adkagent.Context, input RebookingRequest) (ReservationContext, error) {
 			/*
-				TODO: Load the reservation and relevant segment through AirlineService,
+				TODO: Get the reservation and relevant segment through AirlineService,
 				verify that it exists, and map expected domain errors. Do not call a
 				service, repository, or database in this skeleton.
 			*/
@@ -90,12 +90,12 @@ func newSearchAlternativesNode() workflow.Node {
 	)
 }
 
-func newLoadTravelCreditsNode() workflow.Node {
+func newGetTravelCreditsNode() workflow.Node {
 	return workflow.NewFunctionNode(
-		"load_travel_credits",
+		"get_travel_credits",
 		func(ctx adkagent.Context, input ReservationContext) (TravelCreditsResult, error) {
 			/*
-				TODO: Identify the reservation owner and load non-expired travel
+				TODO: Identify the reservation owner and get non-expired travel
 				credits, preserving their currency information. Do not query or
 				calculate credits in this skeleton.
 			*/

@@ -11,9 +11,9 @@ import (
 
 func newWorkflow(llm model.LLM) (adkagent.Agent, error) {
 	understandRequest := newUnderstandRequestNode(llm)
-	loadReservation := newLoadReservationNode()
+	getReservation := newGetReservationNode()
 	searchAlternatives := newSearchAlternativesNode()
-	loadTravelCredits := newLoadTravelCreditsNode()
+	getTravelCredits := newGetTravelCreditsNode()
 	contextJoin := workflow.NewJoinNode("join_context")
 	evaluateOptions := newEvaluateOptionsNode()
 	askConfirmation := newAskConfirmationNode()
@@ -25,9 +25,9 @@ func newWorkflow(llm model.LLM) (adkagent.Agent, error) {
 	builder := workflow.NewEdgeBuilder()
 	builder.
 		Add(workflow.Start, understandRequest).
-		Add(understandRequest, loadReservation).
-		AddFanOut(loadReservation, searchAlternatives, loadTravelCredits).
-		AddFanIn(contextJoin, searchAlternatives, loadTravelCredits).
+		Add(understandRequest, getReservation).
+		AddFanOut(getReservation, searchAlternatives, getTravelCredits).
+		AddFanIn(contextJoin, searchAlternatives, getTravelCredits).
 		Add(contextJoin, evaluateOptions).
 		Add(evaluateOptions, askConfirmation).
 		Add(askConfirmation, validateChange).
