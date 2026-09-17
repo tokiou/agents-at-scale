@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -26,7 +25,6 @@ var (
 )
 
 type Service struct {
-	logger       *slog.Logger
 	customers    CustomerRepository
 	reservations ReservationRepository
 	flights      FlightRepository
@@ -71,7 +69,6 @@ type AirlineService interface {
 }
 
 func NewService(
-	logger *slog.Logger,
 	customers CustomerRepository,
 	reservations ReservationRepository,
 	flights FlightRepository,
@@ -84,7 +81,6 @@ func NewService(
 		rebookingRepository = rebooking[0]
 	}
 	return &Service{
-		logger:       logger,
 		customers:    customers,
 		reservations: reservations,
 		flights:      flights,
@@ -144,7 +140,6 @@ func ValidateRebookingSelection(selection RebookingSelection, snapshot Rebooking
 }
 
 func (s *Service) ValidateRebookingSelection(ctx context.Context, selection RebookingSelection) (RebookingValidation, error) {
-	s.logger.Debug("validating rebooking selection", "segment_id", selection.SegmentID, "new_flight_id", selection.NewFlightID)
 	if s.rebooking == nil {
 		return RebookingValidation{}, errors.New("rebooking repository is required")
 	}
@@ -159,7 +154,6 @@ func (s *Service) ValidateRebookingSelection(ctx context.Context, selection Rebo
 }
 
 func (s *Service) ExecuteRebooking(ctx context.Context, selection RebookingSelection) (*RebookingResult, error) {
-	s.logger.Info("executing rebooking", "segment_id", selection.SegmentID, "new_flight_id", selection.NewFlightID)
 	if s.rebooking == nil {
 		return nil, errors.New("rebooking repository is required")
 	}
@@ -167,7 +161,6 @@ func (s *Service) ExecuteRebooking(ctx context.Context, selection RebookingSelec
 }
 
 func (s *Service) VerifyRebooking(ctx context.Context, selection RebookingSelection) (*RebookingResult, error) {
-	s.logger.Debug("verifying rebooking", "segment_id", selection.SegmentID, "new_flight_id", selection.NewFlightID)
 	if s.rebooking == nil {
 		return nil, errors.New("rebooking repository is required")
 	}
