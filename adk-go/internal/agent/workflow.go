@@ -3,15 +3,17 @@ package agent
 import (
 	"fmt"
 
+	"github.com/tokiou/agents-at-scale/internal/airline"
+
 	adkagent "google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/agent/workflowagent"
 	"google.golang.org/adk/v2/model"
 	"google.golang.org/adk/v2/workflow"
 )
 
-func newWorkflow(llm model.LLM) (adkagent.Agent, error) {
+func newWorkflow(llm model.LLM, airlineService *airline.Service) (adkagent.Agent, error) {
 	understandRequest := newUnderstandRequestNode(llm)
-	getReservation := newGetReservationNode()
+	getReservation := newGetReservationNode(airlineService)
 	searchAlternatives := newSearchAlternativesNode()
 	getTravelCredits := newGetTravelCreditsNode()
 	contextJoin := workflow.NewJoinNode("join_context")

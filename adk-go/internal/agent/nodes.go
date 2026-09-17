@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/tokiou/agents-at-scale/internal/agent/prompts"
+	"github.com/tokiou/agents-at-scale/internal/airline"
 
 	adkagent "google.golang.org/adk/v2/agent"
 	"google.golang.org/adk/v2/model"
@@ -60,16 +61,24 @@ func contentText(content *genai.Content) string {
 	return builder.String()
 }
 
-func newGetReservationNode() workflow.Node {
+func newGetReservationNode(service *airline.Service) workflow.Node {
 	return workflow.NewFunctionNode(
 		"get_reservation",
 		func(ctx adkagent.Context, input RebookingRequest) (ReservationContext, error) {
-			/*
-				TODO: Get the reservation and relevant segment through AirlineService,
-				verify that it exists, and map expected domain errors. Do not call a
-				service, repository, or database in this skeleton.
-			*/
-			return ReservationContext{}, nil
+			if service == nil {
+				return ReservationContext{}, fmt.Errorf("get reservation service is required")
+			}
+			reservation, err := service.GetReservation(ctx, input.BookingReference)
+			if err != nil {
+				return ReservationContext{}, fmt.Errorf("get reservation context: %w", err)
+			}
+			if reservation == nil {
+				return ReservationContext{}, fmt.Errorf("get reservation context: service returned nil reservation")
+			}
+			return ReservationContext{
+				Request:     input,
+				Reservation: reservation,
+			}, nil
 		},
 		workflow.NodeConfig{},
 	)

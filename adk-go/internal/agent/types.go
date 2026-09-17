@@ -1,5 +1,7 @@
 package agent
 
+import "github.com/tokiou/agents-at-scale/internal/airline"
+
 // These are workflow contracts, not persisted airline domain models.
 
 type RebookingRequest struct {
@@ -7,7 +9,8 @@ type RebookingRequest struct {
 }
 
 type ReservationContext struct {
-	Request RebookingRequest
+	Request     RebookingRequest
+	Reservation *airline.ReservationDetails
 }
 
 type SearchAlternativesResult struct{}
