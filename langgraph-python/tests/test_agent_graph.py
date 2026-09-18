@@ -58,6 +58,12 @@ class FakeAirline:
     async def get_available_travel_credits(self, _customer_id, _currency):
         return []
 
+    async def execute_rebooking(self, selection):
+        return {"selection": selection}
+
+    async def verify_rebooking(self, selection):
+        return {"selection": selection}
+
 
 class FakeValidator:
     def __init__(self):
@@ -135,9 +141,9 @@ class AgentGraphTests(unittest.IsolatedAsyncioTestCase):
             )
         )
 
-        self.assertEqual(result["final"].status, "ready")
+        self.assertEqual(result["final"].status, "completed")
         self.assertEqual(len(validator.calls), 1)
-        self.assertEqual(result["route"], "ready")
+        self.assertEqual(result["route"], "completed")
 
     async def test_declined_confirmation_is_terminal(self):
         graph, _llm, _airline, validator = self._build()

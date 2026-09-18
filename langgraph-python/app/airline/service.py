@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+from decimal import Decimal
 from uuid import UUID
 
 from app.airline.models import FlightStatus
@@ -13,8 +15,13 @@ from app.airline.schemas import (
     ReservationDetailsSchema,
     SearchAvailableFlightsParamsSchema,
     SearchRebookingOptionsInputSchema,
+    RebookingResultSchema,
+    RebookingSelectionSchema,
+    RebookingSnapshotSchema,
+    RebookingValidationSchema,
     TravelCreditSchema,
 )
+from app.airline.repository.errors import RebookingRuleError
 
 
 class InvalidSearchWindowError(ValueError):
@@ -33,12 +40,14 @@ class Service:
         flights: FlightRepository,
         credits: TravelCreditRepository,
         changes: FlightChangeRepository,
+        rebooking=None,
     ) -> None:
         self._customers = customers
         self._reservations = reservations
         self._flights = flights
         self._credits = credits
         self._changes = changes
+        self._rebooking = rebooking
 
     async def get_customer(self, customer_id: UUID) -> CustomerSchema:
         return CustomerSchema.model_validate(await self._customers.get_by_id(customer_id))
@@ -77,14 +86,8 @@ class Service:
             )
         )
 
-        original_fare_found = False
-        for candidate in candidates:
-            for fare in candidate.fares:
-                if fare.fare_class.id == segment.fare_class_id:
-                    original_fare_found = True
-                    if not fare.fare_class.change_allowed:
-                        return []
-        if not original_fare_found:
+        original_fare = getattr(segment, "fare_class", None)
+        if original_fare is not None and not original_fare.change_allowed:
             return []
 
         options: list[RebookingOptionSchema] = []
@@ -117,3 +120,97 @@ class Service:
     async def get_change_history(self, segment_id: UUID) -> list[FlightChangeSchema]:
         changes = await self._changes.get_by_segment(segment_id)
         return [FlightChangeSchema.model_validate(change) for change in changes]
+
+    async def validate_rebooking_selection(
+        self, selection: RebookingSelectionSchema
+    ) -> RebookingValidationSchema:
+        if self._rebooking is None or not hasattr(self._rebooking, "get_snapshot"):
+            raise RuntimeError("rebooking repository is required")
+        snapshot, credit = await self._rebooking.get_snapshot(selection)
+        return validate_rebooking_selection(selection, snapshot, credit)
+
+    async def execute_rebooking(self, selection: RebookingSelectionSchema) -> RebookingResultSchema:
+        if self._rebooking is None or not hasattr(self._rebooking, "execute"):
+            raise RuntimeError("rebooking repository is required")
+        return await self._rebooking.execute(selection, validate_rebooking_selection)
+
+    async def verify_rebooking(self, selection: RebookingSelectionSchema) -> RebookingResultSchema:
+        if self._rebooking is None or not hasattr(self._rebooking, "verify"):
+            raise RuntimeError("rebooking repository is required")
+        return await self._rebooking.verify(selection)
+
+
+def validate_rebooking_selection(
+    selection: RebookingSelectionSchema,
+    snapshot: RebookingSnapshotSchema,
+    credit: TravelCreditSchema | None,
+) -> RebookingValidationSchema:
+    if selection.segment_id != snapshot.segment_id:
+        raise RebookingRuleError("reservation segment cannot be changed")
+    if snapshot.reservation_status.value != "CONFIRMED":
+        raise RebookingRuleError("reservation is not confirmed")
+    if snapshot.segment_status.value not in {"CONFIRMED", "CHANGED"}:
+        raise RebookingRuleError("reservation segment cannot be changed")
+    if (
+        snapshot.segment_status.value == "CHANGED"
+        and snapshot.old_flight_id == selection.new_flight_id
+        and snapshot.old_fare_class_id == selection.new_fare_class_id
+    ):
+        raise RebookingRuleError("rebooking was already applied")
+    if not snapshot.old_change_allowed:
+        raise RebookingRuleError("fare change is not allowed")
+    if (
+        snapshot.target_flight_id != selection.new_flight_id
+        or snapshot.target_fare_class_id != selection.new_fare_class_id
+        or snapshot.target_status.value != "SCHEDULED"
+        or snapshot.available_seats < snapshot.passenger_count
+    ):
+        raise RebookingRuleError("selected flight is unavailable")
+    if (
+        snapshot.origin_airport != snapshot.target_origin
+        or snapshot.destination_airport != snapshot.target_destination
+    ):
+        raise RebookingRuleError("selected flight route does not match")
+    if not snapshot.target_change_allowed:
+        raise RebookingRuleError("fare change is not allowed")
+    if snapshot.target_currency != snapshot.old_currency:
+        raise RebookingRuleError("selected fare currency does not match")
+    if snapshot.passenger_count <= 0:
+        raise RebookingRuleError("passenger count must be greater than zero")
+
+    amount = selection.travel_credit_amount
+    if selection.travel_credit_id is not None:
+        if (
+            credit is None
+            or credit.id != selection.travel_credit_id
+            or credit.customer_id != snapshot.customer_id
+            or credit.currency != snapshot.old_currency
+            or credit.remaining_amount < amount
+            or amount <= 0
+            or credit.expires_at <= datetime.now(UTC)
+            or credit.status.value not in {"AVAILABLE", "PARTIALLY_USED"}
+        ):
+            raise RebookingRuleError("travel credit is invalid")
+    elif amount != 0:
+        raise RebookingRuleError("travel credit is invalid")
+
+    difference = snapshot.target_price - snapshot.old_price
+    amount_due = max(difference + snapshot.target_change_fee, Decimal("0"))
+    if amount_due != amount:
+        raise RebookingRuleError("travel credit amount does not match amount due")
+    return RebookingValidationSchema(
+        selection=selection,
+        reservation_id=snapshot.reservation_id,
+        customer_id=snapshot.customer_id,
+        old_flight_id=snapshot.old_flight_id,
+        old_fare_class_id=snapshot.old_fare_class_id,
+        new_flight_id=snapshot.target_flight_id,
+        new_fare_class_id=snapshot.target_fare_class_id,
+        new_price=snapshot.target_price,
+        fare_difference=difference,
+        change_fee=snapshot.target_change_fee,
+        amount_due=amount_due,
+        travel_credit_used=amount,
+        currency=snapshot.old_currency,
+        passenger_count=snapshot.passenger_count,
+    )

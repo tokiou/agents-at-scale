@@ -159,3 +159,63 @@ class RebookingOptionSchema(DTO):
     flight_fare: FlightFareSchema
     fare_difference: Decimal
     change_fee: Decimal
+
+
+class RebookingSelectionSchema(BaseModel):
+    segment_id: UUID
+    new_flight_id: UUID
+    new_fare_class_id: UUID
+    travel_credit_id: UUID | None = None
+    travel_credit_amount: Decimal = Decimal("0")
+
+
+class RebookingSnapshotSchema(BaseModel):
+    segment_id: UUID
+    reservation_id: UUID
+    customer_id: UUID
+    old_flight_id: UUID
+    old_fare_class_id: UUID
+    segment_status: SegmentStatus
+    reservation_status: ReservationStatus
+    old_flight_status: FlightStatus
+    origin_airport: str
+    destination_airport: str
+    old_departure_at: datetime
+    old_price: Decimal
+    old_currency: str
+    old_change_allowed: bool
+    target_flight_id: UUID
+    target_fare_class_id: UUID
+    target_status: FlightStatus
+    target_origin: str
+    target_destination: str
+    target_departure_at: datetime
+    target_price: Decimal
+    target_currency: str
+    available_seats: int
+    target_change_allowed: bool
+    target_change_fee: Decimal
+    passenger_count: int
+
+
+class RebookingValidationSchema(BaseModel):
+    selection: RebookingSelectionSchema
+    reservation_id: UUID
+    customer_id: UUID
+    old_flight_id: UUID
+    old_fare_class_id: UUID
+    new_flight_id: UUID
+    new_fare_class_id: UUID
+    new_price: Decimal
+    fare_difference: Decimal
+    change_fee: Decimal
+    amount_due: Decimal
+    travel_credit_used: Decimal
+    currency: str
+    passenger_count: int
+
+
+class RebookingResultSchema(BaseModel):
+    change: FlightChangeSchema | None = None
+    segment: ReservationSegmentSchema
+    booking_reference: str

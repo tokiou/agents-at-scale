@@ -87,10 +87,12 @@ def validate_change(validator: ChangeValidator | None = None):
         if selection is None:
             raise ValueError("confirmed selection is required")
         context = state.get("reservation_context")
+        raw_context_reservation = _field(context, "reservation") if context is not None else None
+        raw_segments = _field(raw_context_reservation, "segments") if raw_context_reservation is not None else []
         expected_segment_id = (
             confirmation.evaluation.request.segment_id
-            or context.reservation.segments[0].segment.id
-            if context is not None
+            or _field(_field(raw_segments[0], "segment"), "id")
+            if raw_segments
             else confirmation.evaluation.request.segment_id
         )
         if expected_segment_id != selection.segment_id:

@@ -34,12 +34,12 @@ def evaluate_options(llm: AgentLLM):
         raw_credits = state.get("credits_result")
         request = RebookingRequest.model_validate(raw_request) if isinstance(raw_request, dict) else raw_request
         search = (
-            SearchAlternativesResult.model_construct(**raw_search)
+            SearchAlternativesResult.model_validate(raw_search)
             if isinstance(raw_search, dict)
             else raw_search
         )
         credits = (
-            TravelCreditsResult.model_construct(**raw_credits)
+            TravelCreditsResult.model_validate(raw_credits)
             if isinstance(raw_credits, dict)
             else raw_credits
         )

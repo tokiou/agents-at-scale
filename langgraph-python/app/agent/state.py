@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Any, Literal, TypedDict
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 from app.airline.schemas import (
     RebookingOptionSchema,
@@ -15,7 +15,7 @@ from app.airline.schemas import (
 
 
 class RebookingRequest(BaseModel):
-    booking_reference: str
+    booking_reference: str = ""
     segment_id: UUID | None = None
     departure_from: datetime | None = None
     departure_to: datetime | None = None
@@ -69,10 +69,12 @@ class ValidationResult(BaseModel):
 
 
 class FinalResult(BaseModel):
-    status: Literal["ready", "declined", "failed"]
+    status: Literal["completed", "ready", "declined", "failed"]
     message: str
     selection: RebookingSelection | None = None
     validation: Any | None = None
+    execution: Any | None = None
+    verification: Any | None = None
 
 
 class AgentState(TypedDict, total=False):
@@ -84,6 +86,8 @@ class AgentState(TypedDict, total=False):
     evaluation: EvaluationResult
     confirmation: ConfirmationResult
     validation: ValidationResult
+    execution: Any
+    verification: Any
     final: FinalResult
     route: Literal["valid", "invalid", "declined", "retry", "ready"]
     error: str

@@ -33,8 +33,29 @@ func NewAgentRunner(logger *slog.Logger, rootAgent adkagent.Agent, sessionServic
 
 func (r *AgentRunner) Run(ctx context.Context, userID, sessionID, message string) iter.Seq2[*session.Event, error] {
 	content := genai.NewContentFromText(message, genai.RoleUser)
+	return r.run(ctx, userID, sessionID, content, len(message))
+}
+
+// Resume supplies a response to a pending workflow RequestInput in the same
+// ADK session. The response is encoded as a FunctionResponse because that is
+// the ADK protocol used to route HITL input back to the waiting node.
+func (r *AgentRunner) Resume(ctx context.Context, userID, sessionID, interruptID, name string, payload any) iter.Seq2[*session.Event, error] {
+	content := &genai.Content{
+		Role: genai.RoleUser,
+		Parts: []*genai.Part{{FunctionResponse: &genai.FunctionResponse{
+			ID:   interruptID,
+			Name: name,
+			Response: map[string]any{
+				"payload": payload,
+			},
+		}}},
+	}
+	return r.run(ctx, userID, sessionID, content, 0)
+}
+
+func (r *AgentRunner) run(ctx context.Context, userID, sessionID string, content *genai.Content, messageLength int) iter.Seq2[*session.Event, error] {
 	return func(yield func(*session.Event, error) bool) {
-		r.logger.Info("agent run started", "user_id", userID, "session_id", sessionID, "message_length", len(message))
+		r.logger.Info("agent run started", "user_id", userID, "session_id", sessionID, "message_length", messageLength)
 		eventCount := 0
 		for event, err := range r.runner.Run(ctx, userID, sessionID, content, adkagent.RunConfig{}) {
 			if err != nil {
