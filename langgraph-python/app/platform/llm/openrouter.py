@@ -36,8 +36,14 @@ class OpenRouterLLM:
             "options": [item.model_dump(mode="json") for item in options],
             "credits": [item.model_dump(mode="json") for item in credits],
         }
+        response = await self._complete(EVALUATE_OPTIONS, json.dumps(payload))
         result = EvaluationResult.model_validate(
-            await self._complete(EVALUATE_OPTIONS, json.dumps(payload))
+            {
+                **response,
+                "request": request,
+                "options": options,
+                "credits": credits,
+            }
         )
         allowed_ids = {
             option.flight.id for option in options

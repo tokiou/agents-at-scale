@@ -150,7 +150,7 @@ class RebookingRepository:
             )
         )
         if lock:
-            statement = statement.with_for_update()
+            statement = statement.with_for_update(of=FlightFare)
         target = await session.scalar(statement)
         if target is None:
             raise FlightNotFoundError("target flight or fare not found")
@@ -183,7 +183,7 @@ class RebookingRepository:
             .where(ReservationSegment.id == selection.segment_id)
         )
         if lock:
-            statement = statement.with_for_update()
+            statement = statement.with_for_update(of=ReservationSegment)
         segment = await session.scalar(statement)
         if segment is None:
             raise SegmentNotFoundError("reservation segment not found")

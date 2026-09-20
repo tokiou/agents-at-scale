@@ -39,6 +39,7 @@ type AgentRunner interface {
 
 type StatusStore interface {
 	SetJobStatus(context.Context, string, string) error
+	SetJobMetadata(context.Context, string, any) error
 }
 
 type redisStatusStore struct{ client *redis.Client }
@@ -49,6 +50,10 @@ func NewRedisStatusStore(client *redis.Client) StatusStore {
 
 func (s redisStatusStore) SetJobStatus(ctx context.Context, jobID, status string) error {
 	return redisplatform.SetJobStatus(ctx, s.client, jobID, status)
+}
+
+func (s redisStatusStore) SetJobMetadata(ctx context.Context, jobID string, metadata any) error {
+	return redisplatform.SetJobMetadata(ctx, s.client, jobID, metadata)
 }
 
 type Service struct {
@@ -127,6 +132,7 @@ func (s *Service) process(ctx context.Context, delivery amqp091.Delivery) {
 	var runErr error
 	var waiting bool
 	var interruptIDs []string
+	resumeName := "ask_confirmation"
 	var events iter.Seq2[*session.Event, error]
 	if request.Resume != nil {
 		var payload any
@@ -144,6 +150,13 @@ func (s *Service) process(ctx context.Context, delivery amqp091.Delivery) {
 		if event != nil && len(event.LongRunningToolIDs) > 0 {
 			waiting = true
 			interruptIDs = append(interruptIDs, event.LongRunningToolIDs...)
+			if event.Content != nil {
+				for _, part := range event.Content.Parts {
+					if part != nil && part.FunctionCall != nil && strings.TrimSpace(part.FunctionCall.Name) != "" {
+						resumeName = part.FunctionCall.Name
+					}
+				}
+			}
 		}
 		if err != nil {
 			if errors.Is(err, workflow.ErrNodeInterrupted) {
@@ -161,6 +174,12 @@ func (s *Service) process(ctx context.Context, delivery amqp091.Delivery) {
 	if waiting {
 		status = "waiting"
 		s.logger.Info("job waiting for input", "job_id", job.ID, "interrupt_ids", interruptIDs)
+		if err := s.status.SetJobMetadata(ctx, job.ID, map[string]any{
+			"interrupt_ids": interruptIDs,
+			"resume_name":   resumeName,
+		}); err != nil {
+			s.logger.Error("set waiting metadata failed", "job_id", job.ID, "error", err)
+		}
 	}
 	if err := s.status.SetJobStatus(ctx, job.ID, status); err != nil {
 		s.fail(ctx, delivery, job.ID, "set completed status failed", err)

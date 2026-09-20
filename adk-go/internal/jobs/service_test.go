@@ -20,6 +20,8 @@ type fakeStatusStore struct {
 	statuses []string
 }
 
+func (f *fakeStatusStore) SetJobMetadata(_ context.Context, _ string, _ any) error { return nil }
+
 func (s *fakeStatusStore) SetJobStatus(_ context.Context, _ string, status string) error {
 	s.statuses = append(s.statuses, status)
 	return nil

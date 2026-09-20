@@ -124,20 +124,34 @@ class Service:
     async def validate_rebooking_selection(
         self, selection: RebookingSelectionSchema
     ) -> RebookingValidationSchema:
+        selection = _selection_schema(selection)
         if self._rebooking is None or not hasattr(self._rebooking, "get_snapshot"):
             raise RuntimeError("rebooking repository is required")
         snapshot, credit = await self._rebooking.get_snapshot(selection)
         return validate_rebooking_selection(selection, snapshot, credit)
 
+    async def validate_change(self, selection: RebookingSelectionSchema) -> RebookingValidationSchema:
+        return await self.validate_rebooking_selection(selection)
+
     async def execute_rebooking(self, selection: RebookingSelectionSchema) -> RebookingResultSchema:
+        selection = _selection_schema(selection)
         if self._rebooking is None or not hasattr(self._rebooking, "execute"):
             raise RuntimeError("rebooking repository is required")
         return await self._rebooking.execute(selection, validate_rebooking_selection)
 
     async def verify_rebooking(self, selection: RebookingSelectionSchema) -> RebookingResultSchema:
+        selection = _selection_schema(selection)
         if self._rebooking is None or not hasattr(self._rebooking, "verify"):
             raise RuntimeError("rebooking repository is required")
         return await self._rebooking.verify(selection)
+
+
+def _selection_schema(selection) -> RebookingSelectionSchema:
+    if isinstance(selection, RebookingSelectionSchema):
+        return selection
+    if hasattr(selection, "model_dump"):
+        selection = selection.model_dump(mode="json")
+    return RebookingSelectionSchema.model_validate(selection)
 
 
 def validate_rebooking_selection(

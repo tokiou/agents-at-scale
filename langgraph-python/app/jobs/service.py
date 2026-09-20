@@ -3,7 +3,7 @@ import logging
 from uuid import uuid4
 
 from app.platform.rabbitmq import Job, RabbitMQ
-from app.platform.redis import set_job_status
+from app.platform.redis import set_job_metadata, set_job_status
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +42,13 @@ class JobService:
             result = await self._runner.run(job.payload)
             if "__interrupt__" in result:
                 status = "waiting_for_confirmation"
+                interrupt = result["__interrupt__"][0]
+                value = getattr(interrupt, "value", interrupt)
+                await set_job_metadata(
+                    self._redis,
+                    job.id,
+                    {"resume_payload": value, "thread_id": job.payload.get("thread_id")},
+                )
             else:
                 final = result.get("final")
                 final_status = (
