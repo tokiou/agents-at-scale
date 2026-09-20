@@ -54,11 +54,11 @@ type RebookingOption struct {
 }
 
 type RebookingSelection struct {
-	SegmentID          uuid.UUID
-	NewFlightID        uuid.UUID
-	NewFareClassID     uuid.UUID
-	TravelCreditID     uuid.UUID
-	TravelCreditAmount decimal.Decimal
+	SegmentID          uuid.UUID       `json:"segment_id"`
+	NewFlightID        uuid.UUID       `json:"new_flight_id"`
+	NewFareClassID     uuid.UUID       `json:"new_fare_class_id"`
+	TravelCreditID     uuid.UUID       `json:"travel_credit_id"`
+	TravelCreditAmount decimal.Decimal `json:"travel_credit_amount"`
 }
 
 type RebookingValidation struct {

@@ -17,3 +17,14 @@ async def set_job_status(client: Redis, job_id: str, status: str) -> None:
         status,
         ex=STATUS_TTL_SECONDS,
     )
+
+
+async def set_job_metadata(client: Redis, job_id: str, metadata: dict) -> None:
+    """Store HITL resume data without changing the status-key contract."""
+    import json
+
+    await client.set(
+        f"job:{job_id}:metadata",
+        json.dumps(metadata, default=str),
+        ex=STATUS_TTL_SECONDS,
+    )

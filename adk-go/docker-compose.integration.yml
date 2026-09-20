@@ -1,0 +1,40 @@
+services:
+  app:
+    environment:
+      AGENTS_SERVER_ADDR: 0.0.0.0:8080
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/agents_at_scale?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      RABBITMQ_URL: amqp://agents:agents@rabbitmq:5672/
+      RABBITMQ_QUEUE: agent_jobs_e2e_go
+      OPENROUTER_DEPLOYMENT: fake-integration
+      OPENROUTER_API_KEY: integration-only
+      OPENROUTER_BASE_URL: http://fake-llm:8081/v1
+  postgres:
+    ports: !override ["15432:5432"]
+    volumes: !override
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+      - ../tests/integration/fixtures.sql:/docker-entrypoint-initdb.d/002_fixtures.sql:ro
+  fake-llm:
+    build:
+      context: ../tests/integration/fake-llm
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+  redis:
+    ports: !override ["16379:6379"]
+    volumes: !override []
+  rabbitmq:
+    image: rabbitmq:4-management
+    user: "999:999"
+    ports: !override ["25672:5672", "25673:15672"]
+    volumes: !override []
+    tmpfs:
+      - /var/lib/rabbitmq:uid=999,gid=999,mode=0700
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      start_period: 30s
+      interval: 5s
+      timeout: 5s
+      retries: 30

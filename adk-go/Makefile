@@ -1,4 +1,4 @@
-.PHONY: up down build logs generate test
+.PHONY: up down build logs generate test test-integration
 
 up:
 	docker compose up --build
@@ -17,3 +17,6 @@ generate:
 
 test:
 	go test ./...
+
+test-integration:
+	APP_PORT=18080 ../tests/integration/run.sh go

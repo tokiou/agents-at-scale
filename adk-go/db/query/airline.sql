@@ -149,7 +149,7 @@ WHERE id = $1;
 -- name: ConsumeTravelCredit :exec
 UPDATE travel_credits
 SET remaining_amount = remaining_amount - $2,
-    status = CASE WHEN remaining_amount - $2 = 0 THEN 'USED' ELSE 'PARTIALLY_USED' END
+    status = (CASE WHEN remaining_amount - $2 = 0 THEN 'USED' ELSE 'PARTIALLY_USED' END)::travel_credit_status
 WHERE id = $1 AND remaining_amount >= $2;
 
 -- name: CreateFlightChange :one

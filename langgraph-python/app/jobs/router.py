@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 
 from app.jobs.service import JobService
 
-router = APIRouter(prefix="/jobs")
+router = APIRouter(prefix="/airline/chat")
 
 
 class JobRequest(BaseModel):
