@@ -137,48 +137,53 @@ This allows the benchmark to model long-running and stateful agents rather than 
 
 # Agent Scenario
 
-The first workload will be an **Incident Investigation Agent**.
+The benchmark workload is an **Airline Rebooking Agent**.
 
-The agent receives an incident such as:
+The agent receives a customer request such as:
 
 ```text
-Checkout API latency increased from 150ms to 2.8s.
+I need to rebook reservation ABC123 for a flight tomorrow afternoon.
 ```
 
-Its objective is to investigate available evidence and produce a probable root cause.
+Its objective is to find valid alternatives, evaluate them against the customer's request,
+obtain confirmation, execute the rebooking atomically and verify the persisted result.
 
-The workflow will include planning, parallel investigation, state updates, validation and conditional retries.
+The workflow is:
 
 ```text
-                    START
-                      │
-                      ▼
-                  Classify
-                      │
-                      ▼
-                    Plan
-                      │
-          ┌───────────┼───────────┐
-          ▼           ▼           ▼
-        Logs       Metrics    Deployments
-          │           │           │
-          └───────────┼───────────┘
-                      ▼
-                  Correlate
-                      │
-                      ▼
-                  Hypothesis
-                      │
-                      ▼
-                   Validate
-                  /        \
-              invalid      valid
-                 │           │
-                 ▼           ▼
-            Investigate    Report
-               again         │
-                 │           ▼
-                 └───────── END
+                         START
+                           │
+                           ▼
+                  Understand Request
+                           │
+                           ▼
+                    Get Reservation
+                           │
+              ┌────────────┴────────────┐
+              ▼                         ▼
+      Search Alternatives       Get Travel Credits
+              └────────────┬────────────┘
+                           ▼
+                   Evaluate Options
+                           │
+                           ▼
+                   Ask Confirmation
+                       /          \
+                 declined       confirmed
+                    │                │
+                    ▼                ▼
+                  END          Validate Change
+                                  /       \
+                             invalid      valid
+                                │            │
+                                ▼            ▼
+                         Explain/Retry  Execute Rebooking
+                                             │
+                                             ▼
+                                      Verify Rebooking
+                                             │
+                                             ▼
+                                            END
 ```
 
 The workload intentionally includes characteristics commonly found in production agent systems:
@@ -199,25 +204,19 @@ Both LangGraph and ADK will implement the same logical agent workflow.
 
 # External Services
 
-The agent will interact with services representing:
+The agent interacts with equivalent airline dependencies in both runtimes:
 
-* logs;
-* application metrics;
-* distributed traces;
-* deployment history;
-* service configuration.
+* customer and reservation data in PostgreSQL;
+* available flights and fare inventory;
+* travel-credit balances;
+* flight-change history;
+* Redis for job state and coordination;
+* RabbitMQ for durable agent jobs;
+* an LLM provider for request understanding and option evaluation.
 
-For example:
-
-```text
-get_logs()
-get_metrics()
-get_traces()
-get_recent_deployments()
-get_service_config()
-```
-
-These services will expose equivalent responses to both implementations.
+The controlled benchmark will provide deterministic responses and configurable latency for
+these dependencies. The production benchmark will use the same real LLM provider and model
+for both implementations.
 
 ---
 
