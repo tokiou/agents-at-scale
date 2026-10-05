@@ -1,0 +1,36 @@
+# Benchmark stack, used with docker-compose.yml and
+# docker-compose.fake-llm.yml by bench/run.sh. Values are identical in both
+# runtimes; bench/run.sh sets the BENCH_* variables.
+x-bench-env: &bench-env
+  AGENTS_SERVER_ADDR: 0.0.0.0:8080
+  LOG_LEVEL: warn
+  DATABASE_URL: postgres://postgres:postgres@postgres:5432/agents_at_scale?sslmode=disable
+  REDIS_URL: redis://redis:6379/0
+  RABBITMQ_URL: amqp://agents:agents@rabbitmq:5672/
+  RABBITMQ_QUEUE: agent_jobs_bench
+  DB_MAX_OPEN_CONNS: ${BENCH_DB_POOL:-50}
+  DB_MAX_IDLE_CONNS: ${BENCH_DB_POOL:-50}
+  LLM_MAX_CONNECTIONS: ${BENCH_LLM_CONNECTIONS:-500}
+  JOB_MAX_ATTEMPTS: 3
+  JOB_RETRY_BASE_MS: 1000
+
+services:
+  api:
+    environment: *bench-env
+    ports: !override ["28080:8080"]
+  worker:
+    environment:
+      <<: *bench-env
+      WORKER_CONCURRENCY: ${BENCH_WORKER_CONCURRENCY:-500}
+  postgres:
+    ports: !override []
+    volumes: !override
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+    tmpfs:
+      - /var/lib/postgresql/data
+  redis:
+    ports: !override ["26379:6379"]
+    volumes: !override []
+  rabbitmq:
+    ports: !override ["25680:15672"]
+    volumes: !override []
