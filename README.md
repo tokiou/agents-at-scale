@@ -135,6 +135,95 @@ This allows the benchmark to model long-running and stateful agents rather than 
 
 ---
 
+# Runtime Contract
+
+Both runtimes expose the same HTTP API, job statuses and scaling knobs, so a
+load generator can target either one without changes.
+
+## Chat API
+
+`POST /airline/chat` queues a job and returns `202 {"id": "<job id>", "status": "published"}`.
+
+Start a conversation:
+
+```json
+{"user_id": "<user>", "session_id": "<session>", "message": "I need to rebook ABC123 tomorrow"}
+```
+
+Answer the pending confirmation of the same session:
+
+```json
+{"user_id": "<user>", "session_id": "<session>",
+ "resume": {"confirmed": true, "selection": {
+   "segment_id": "<uuid>", "new_flight_id": "<uuid>", "new_fare_class_id": "<uuid>",
+   "travel_credit_id": "<uuid>", "travel_credit_amount": "55"}}}
+```
+
+`resume` is `{"confirmed": false}` to decline. Exactly one of `message` or
+`resume` is required. Invalid requests return `422 {"detail": "<reason>"}`.
+
+## Job status
+
+Redis key `job:<id>:status` moves through:
+
+```text
+published -> processing -> waiting_for_confirmation | completed | failed
+                 ^    |
+                 +----+ retrying (backoff, up to JOB_MAX_ATTEMPTS)
+```
+
+When a job pauses, `job:<id>:metadata` holds
+`{"user_id", "session_id", "message", "evaluation"}` with the options to
+choose from. `job:<id>:timing` holds `published_ms`, `started_ms`,
+`finished_ms` (epoch milliseconds) and `attempts`.
+
+## Delivery guarantees
+
+* **Idempotent requests:** an `Idempotency-Key` header makes a repeated POST
+  return the original job with `"status": "duplicate"` instead of queueing
+  it again (`airline:idempotency:<key>`, 24 h).
+* **One job per conversation:** workers hold `airline:lock:<user>:<session>`
+  while running a job; a second job for the same conversation is delayed
+  without consuming an attempt.
+* **Retries with backoff:** a failed agent run is republished to
+  `<queue>.retry.<n>`, which expires back into the main queue after
+  `JOB_RETRY_BASE_MS * 2^(n-1)`. After `JOB_MAX_ATTEMPTS` the job goes to
+  `<queue>.dead` with its last error. Invalid payloads and resumes without a
+  pending confirmation go there directly.
+* **Duplicate deliveries:** a delivery of a job that already reached a final
+  status is acknowledged without running the agent again.
+* **Migrations:** only the `api` service creates the agent session tables
+  (`RUN_MIGRATIONS`); workers start after it is healthy.
+
+## Workers and replicas
+
+Each Compose stack runs an `api` service (publishes only) and a `worker`
+service (consumes jobs). Agent sessions are persisted in PostgreSQL in both
+runtimes, so any worker replica can resume any session.
+
+| Variable | Meaning |
+| --- | --- |
+| `WORKER_REPLICAS` | worker containers started by Compose |
+| `WORKER_CONCURRENCY` | jobs each worker runs at once (RabbitMQ prefetch) |
+| `WORKER_CPUS` / `WORKER_MEMORY` | resource limits per worker container |
+| `API_CPUS` / `API_MEMORY` | resource limits of the api container |
+| `DB_MAX_OPEN_CONNS` | size of each of the two PostgreSQL pools per process |
+| `POSTGRES_MAX_CONNECTIONS` | PostgreSQL `max_connections` |
+| `LLM_MAX_CONNECTIONS` / `LLM_TIMEOUT_SECONDS` | LLM HTTP client limits (same in both runtimes) |
+| `FAKE_LLM_LATENCY_MS` | fixed delay per fake LLM call |
+| `FAKE_LLM_JITTER_MS` | extra uniform random delay per fake LLM call |
+
+```bash
+make up                                    # real LLM provider
+make up FAKE_LLM=1                         # deterministic fake LLM
+FAKE_LLM_LATENCY_MS=200 make up FAKE_LLM=1 # controlled inference latency
+make scale WORKERS=5                       # change replicas on a running stack
+```
+
+See [bench/README.md](bench/README.md) for the load benchmark.
+
+---
+
 # Agent Scenario
 
 The benchmark workload is an **Airline Rebooking Agent**.
