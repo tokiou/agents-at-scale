@@ -1,0 +1,27 @@
+# Replaces the real LLM provider with the deterministic fake LLM. Use it for
+# the controlled benchmark and integration tests:
+#   docker compose -f docker-compose.yml -f docker-compose.fake-llm.yml up
+# FAKE_LLM_LATENCY_MS / FAKE_LLM_JITTER_MS set the simulated inference time.
+x-fake-llm-client: &fake-llm-client
+  environment:
+    OPENROUTER_DEPLOYMENT: fake-integration
+    OPENROUTER_API_KEY: fake-llm-only
+    OPENROUTER_BASE_URL: http://fake-llm:8081/v1
+  depends_on:
+    fake-llm:
+      condition: service_healthy
+
+services:
+  api: *fake-llm-client
+  worker: *fake-llm-client
+  fake-llm:
+    build:
+      context: ../tests/integration/fake-llm
+    environment:
+      FAKE_LLM_LATENCY_MS: ${FAKE_LLM_LATENCY_MS:-0}
+      FAKE_LLM_JITTER_MS: ${FAKE_LLM_JITTER_MS:-0}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/health')"]
+      interval: 2s
+      timeout: 2s
+      retries: 15

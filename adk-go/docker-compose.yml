@@ -1,22 +1,58 @@
+x-app: &app
+  build:
+    context: .
+    dockerfile: Dockerfile
+  env_file:
+    - .env
+  depends_on: &infra
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    rabbitmq:
+      condition: service_healthy
+
 services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    env_file:
-      - .env
+  # HTTP entrypoint: publishes jobs only and runs the schema migrations of
+  # the agent session store before workers start.
+  api:
+    <<: *app
+    environment:
+      WORKER_CONCURRENCY: "0"
+      RUN_MIGRATIONS: "true"
+    deploy:
+      resources:
+        limits:
+          cpus: "${API_CPUS:-1}"
+          memory: ${API_MEMORY:-512m}
     ports:
       - "${APP_PORT}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Job consumers. Scale with WORKER_REPLICAS; each replica runs
+  # WORKER_CONCURRENCY jobs at once within WORKER_CPUS / WORKER_MEMORY.
+  worker:
+    <<: *app
+    environment:
+      RUN_MIGRATIONS: "false"
+    deploy:
+      replicas: ${WORKER_REPLICAS:-1}
+      resources:
+        limits:
+          cpus: "${WORKER_CPUS:-1}"
+          memory: ${WORKER_MEMORY:-1g}
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      rabbitmq:
+      <<: *infra
+      api:
         condition: service_healthy
 
   postgres:
     image: postgres:17-alpine
+    command: ["postgres", "-c", "max_connections=${POSTGRES_MAX_CONNECTIONS:-300}"]
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}

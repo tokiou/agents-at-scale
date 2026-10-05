@@ -1,16 +1,23 @@
-.PHONY: up down build logs test test-integration
+# FAKE_LLM=1 swaps the real provider for the fake LLM (FAKE_LLM_LATENCY_MS,
+# FAKE_LLM_JITTER_MS). WORKERS=n sets the worker replica count for `scale`.
+COMPOSE = docker compose $(if $(FAKE_LLM),-f docker-compose.yml -f docker-compose.fake-llm.yml)
+
+.PHONY: up down build logs scale test test-integration
 
 up:
-	docker compose up --build
+	$(COMPOSE) up --build
 
 down:
-	docker compose down
+	$(COMPOSE) down --remove-orphans
 
 build:
-	docker compose build
+	$(COMPOSE) build
 
 logs:
-	docker compose logs -f
+	$(COMPOSE) logs -f
+
+scale:
+	$(COMPOSE) up -d --no-recreate --scale worker=$(WORKERS)
 
 test:
 	.venv/bin/python -m compileall -q app
