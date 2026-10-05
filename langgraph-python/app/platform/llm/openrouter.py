@@ -19,7 +19,15 @@ class OpenRouterLLM:
         if not settings.openrouter_base_url:
             raise ValueError("OPENROUTER_BASE_URL is required")
         self._settings = settings
-        self._client = client or httpx.AsyncClient(timeout=60.0)
+        # Same connection cap and timeout as the Go client (LLM_MAX_CONNECTIONS,
+        # LLM_TIMEOUT_SECONDS) instead of httpx's default 100-connection limit.
+        self._client = client or httpx.AsyncClient(
+            timeout=float(settings.llm_timeout_seconds),
+            limits=httpx.Limits(
+                max_connections=settings.llm_max_connections,
+                max_keepalive_connections=settings.llm_max_connections,
+            ),
+        )
         self._owns_client = client is None
 
     async def close(self) -> None:

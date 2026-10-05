@@ -277,6 +277,10 @@ func newAskConfirmationNode(logger *slog.Logger) workflow.Node {
 				Message:     "Select a rebooking option and confirm the change.",
 				Payload:     input,
 			})
+			if errors.Is(err, workflow.ErrNodeInterrupted) {
+				// Normal pause: the workflow waits for the user's answer.
+				return ConfirmationResult{}, err
+			}
 			if err != nil {
 				logger.Error("confirmation request failed", "error", err)
 				return ConfirmationResult{}, err

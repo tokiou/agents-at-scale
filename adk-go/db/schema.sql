@@ -108,3 +108,10 @@ CREATE TABLE flight_changes (
     currency CHAR(3) NOT NULL,
     created_at TIMESTAMPTZ NOT NULL
 );
+
+-- Foreign-key and search indexes used by the airline repositories.
+CREATE INDEX reservation_passengers_reservation_idx ON reservation_passengers (reservation_id);
+CREATE INDEX reservation_segments_reservation_idx ON reservation_segments (reservation_id);
+CREATE INDEX flights_route_departure_idx ON flights (origin_airport, destination_airport, departure_at);
+CREATE INDEX travel_credits_customer_idx ON travel_credits (customer_id);
+CREATE INDEX flight_changes_segment_idx ON flight_changes (reservation_segment_id);

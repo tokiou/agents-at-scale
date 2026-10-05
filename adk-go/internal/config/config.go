@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"time"
 )
 
 type Config struct {
@@ -16,6 +17,14 @@ type Config struct {
 	RedisURL          string
 	RabbitMQURL       string
 	RabbitMQQueue     string
+	WorkerConcurrency int
+	JobMaxAttempts    int
+	JobRetryBaseMS    int
+	JobLockTTLMS      int
+	RunMigrations     bool
+	LLMMaxConnections int
+	LLMTimeoutSeconds int
+	PprofAddress      string
 	MaxOpenConns      int
 	MaxIdleConns      int
 	ConnMaxLifetime   int
@@ -38,6 +47,14 @@ func Load() Config {
 		RedisURL:          envOrDefault("REDIS_URL", "redis://localhost:6379/0"),
 		RabbitMQURL:       envOrDefault("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/"),
 		RabbitMQQueue:     envOrDefault("RABBITMQ_QUEUE", "agent_jobs"),
+		WorkerConcurrency: envIntOrDefault("WORKER_CONCURRENCY", 1),
+		JobMaxAttempts:    envIntOrDefault("JOB_MAX_ATTEMPTS", 3),
+		JobRetryBaseMS:    envIntOrDefault("JOB_RETRY_BASE_MS", 1000),
+		JobLockTTLMS:      envIntOrDefault("JOB_LOCK_TTL_MS", 300000),
+		RunMigrations:     envOrDefault("RUN_MIGRATIONS", "true") == "true",
+		LLMMaxConnections: envIntOrDefault("LLM_MAX_CONNECTIONS", 100),
+		LLMTimeoutSeconds: envIntOrDefault("LLM_TIMEOUT_SECONDS", 60),
+		PprofAddress:      envOrDefault("PPROF_ADDR", ""),
 		MaxOpenConns:      envIntOrDefault("DB_MAX_OPEN_CONNS", 10),
 		MaxIdleConns:      envIntOrDefault("DB_MAX_IDLE_CONNS", 5),
 		ConnMaxLifetime:   envIntOrDefault("DB_CONN_MAX_LIFETIME_MINUTES", 30),
@@ -57,4 +74,16 @@ func envIntOrDefault(key string, fallback int) int {
 		return fallback
 	}
 	return value
+}
+
+// RetryDelays returns one exponential backoff delay per retry level:
+// base, 2*base, 4*base... for JobMaxAttempts-1 retries (at least one level,
+// which also delays jobs whose conversation is busy).
+func (c Config) RetryDelays() []time.Duration {
+	levels := max(c.JobMaxAttempts-1, 1)
+	delays := make([]time.Duration, levels)
+	for i := range delays {
+		delays[i] = time.Duration(c.JobRetryBaseMS) * time.Millisecond << i
+	}
+	return delays
 }

@@ -1,10 +1,11 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from sqlalchemy import text
 
 from app.jobs import router as jobs_router
-from app.jobs.service import JobService
+from app.jobs.service import JobService, WorkerOptions
 from app.agent.graph import build_graph
 from app.agent.runner import AgentRunner
 from app.airline.repository.customer import CustomerRepository
@@ -17,12 +18,15 @@ from app.airline.service import Service
 from app.platform.postgres import create_session_factory
 from app.platform.llm import OpenRouterLLM
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from psycopg.rows import dict_row
+from psycopg_pool import AsyncConnectionPool
 from app.config import load_settings
 from app.platform.postgres import create_engine
 from app.platform.rabbitmq import RabbitMQ
-from app.platform.redis import create_client
+from app.platform.redis import JobStore, create_client
 
 settings = load_settings()
+logging.basicConfig(level=settings.log_level, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
 
 @asynccontextmanager
@@ -32,8 +36,7 @@ async def lifespan(application: FastAPI):
     rabbitmq = None
     job_service = None
     llm = None
-    checkpointer_context = None
-    checkpointer_started = False
+    checkpoint_pool = None
     try:
         async with engine.begin() as connection:
             await connection.execute(text("SELECT 1"))
@@ -49,10 +52,17 @@ async def lifespan(application: FastAPI):
             rebooking,
         )
         llm = OpenRouterLLM(settings)
-        checkpointer_context = AsyncPostgresSaver.from_conn_string(settings.database_url)
-        checkpointer = await checkpointer_context.__aenter__()
-        checkpointer_started = True
-        await checkpointer.setup()
+        # A pool lets concurrent jobs checkpoint without sharing one connection.
+        checkpoint_pool = AsyncConnectionPool(
+            settings.database_url,
+            max_size=settings.max_open_conns,
+            kwargs={"autocommit": True, "prepare_threshold": 0, "row_factory": dict_row},
+            open=False,
+        )
+        await checkpoint_pool.open()
+        checkpointer = AsyncPostgresSaver(checkpoint_pool)
+        if settings.run_migrations:
+            await checkpointer.setup()
         graph = build_graph(
             llm,
             airline_service,
@@ -64,7 +74,16 @@ async def lifespan(application: FastAPI):
         rabbitmq = await RabbitMQ.connect(settings)
         application.state.redis = redis
         application.state.rabbitmq = rabbitmq
-        job_service = JobService(redis, rabbitmq, application.state.agent)
+        job_service = JobService(
+            JobStore(redis),
+            rabbitmq,
+            application.state.agent,
+            WorkerOptions(
+                concurrency=settings.worker_concurrency,
+                max_attempts=settings.job_max_attempts,
+                lock_ttl_ms=settings.job_lock_ttl_ms,
+            ),
+        )
         await job_service.start()
         application.state.jobs = job_service
         yield
@@ -75,8 +94,8 @@ async def lifespan(application: FastAPI):
             await rabbitmq.close()
         if llm is not None:
             await llm.close()
-        if checkpointer_started:
-            await checkpointer_context.__aexit__(None, None, None)
+        if checkpoint_pool is not None:
+            await checkpoint_pool.close()
         if redis is not None:
             await redis.aclose()
         await engine.dispose()

@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"google.golang.org/genai"
 
@@ -21,7 +22,21 @@ type Config struct {
 	Deployment string
 	APIKey     string
 	BaseURL    string
-	HTTPClient *http.Client
+	// MaxConnections caps concurrent connections to the provider and keeps
+	// that many idle connections for reuse. Both runtimes use the same value.
+	MaxConnections int
+	Timeout        time.Duration
+	HTTPClient     *http.Client
+}
+
+// NewHTTPClient builds the provider client with explicit connection limits
+// instead of http.DefaultClient (2 idle connections per host, no timeout).
+func NewHTTPClient(maxConnections int, timeout time.Duration) *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxConnsPerHost = maxConnections
+	transport.MaxIdleConns = maxConnections
+	transport.MaxIdleConnsPerHost = maxConnections
+	return &http.Client{Transport: transport, Timeout: timeout}
 }
 
 type Client struct {
@@ -44,7 +59,7 @@ func New(logger *slog.Logger, cfg Config) (*Client, error) {
 	}
 	httpClient := cfg.HTTPClient
 	if httpClient == nil {
-		httpClient = http.DefaultClient
+		httpClient = NewHTTPClient(cfg.MaxConnections, cfg.Timeout)
 	}
 	return &Client{
 		logger:     logger,

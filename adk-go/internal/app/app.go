@@ -2,11 +2,11 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	_ "net/http/pprof"
 	"os/signal"
 	"syscall"
 	"time"
@@ -23,7 +23,6 @@ import (
 	"github.com/tokiou/agents-at-scale/internal/platform/rabbitmq"
 	redisplatform "github.com/tokiou/agents-at-scale/internal/platform/redis"
 	"github.com/tokiou/agents-at-scale/internal/runtime"
-	"google.golang.org/adk/v2/session"
 )
 
 func Run(cfg config.Config) error {
@@ -33,6 +32,16 @@ func Run(cfg config.Config) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	if cfg.PprofAddress != "" {
+		// Profiling for benchmark diagnosis only; disabled unless PPROF_ADDR is set.
+		go func() {
+			logger.Info("pprof listening", "address", cfg.PprofAddress)
+			if err := http.ListenAndServe(cfg.PprofAddress, nil); err != nil {
+				logger.Error("pprof server failed", "error", err)
+			}
+		}()
+	}
 
 	db, err := postgres.New(ctx, postgres.Config{
 		URL:             cfg.DatabaseURL,
@@ -55,9 +64,11 @@ func Run(cfg config.Config) error {
 		airlinerepository.NewRebookingRepository(queries, db),
 	)
 	llm, err := openrouter.New(logger, openrouter.Config{
-		Deployment: cfg.OpenRouterModel,
-		APIKey:     cfg.OpenRouterAPIKey,
-		BaseURL:    cfg.OpenRouterBaseURL,
+		Deployment:     cfg.OpenRouterModel,
+		APIKey:         cfg.OpenRouterAPIKey,
+		BaseURL:        cfg.OpenRouterBaseURL,
+		MaxConnections: cfg.LLMMaxConnections,
+		Timeout:        time.Duration(cfg.LLMTimeoutSeconds) * time.Second,
 	})
 	if err != nil {
 		logger.Error("openrouter initialization failed", "error", err)
@@ -68,9 +79,18 @@ func Run(cfg config.Config) error {
 		logger.Error("agent initialization failed", "error", err)
 		return err
 	}
-	// ADK sessions are process-scoped for now; a restart loses pending
-	// confirmations and sessions are not shared between replicas.
-	agentRunner, err := runtime.NewAgentRunner(logger, rootAgent, session.InMemoryService())
+	sessionService, sessionDB, err := postgres.NewSessionService(postgres.Config{
+		URL:             cfg.DatabaseURL,
+		MaxOpenConns:    cfg.MaxOpenConns,
+		MaxIdleConns:    cfg.MaxIdleConns,
+		ConnMaxLifetime: cfg.ConnMaxLifetime,
+	}, cfg.RunMigrations)
+	if err != nil {
+		logger.Error("session store initialization failed", "error", err)
+		return err
+	}
+	defer sessionDB.Close()
+	agentRunner, err := runtime.NewAgentRunner(logger, rootAgent, sessionService)
 	if err != nil {
 		logger.Error("agent runner initialization failed", "error", err)
 		return err
@@ -81,26 +101,24 @@ func Run(cfg config.Config) error {
 		return err
 	}
 	defer redisClient.Close()
-	rabbitClient, err := rabbitmq.New(cfg.RabbitMQURL, cfg.RabbitMQQueue)
+	rabbitClient, err := rabbitmq.New(cfg.RabbitMQURL, cfg.RabbitMQQueue, cfg.RetryDelays())
 	if err != nil {
 		logger.Error("rabbitmq initialization failed", "error", err)
 		return err
 	}
 	defer rabbitClient.Close()
 
-	jobService := jobs.New(logger, jobs.NewRedisStatusStore(redisClient), rabbitClient, agentRunner)
+	jobService := jobs.New(logger, jobs.NewRedisStore(redisClient), rabbitClient, agentRunner, jobs.Options{
+		Concurrency: cfg.WorkerConcurrency,
+		MaxAttempts: cfg.JobMaxAttempts,
+		LockTTL:     time.Duration(cfg.JobLockTTLMS) * time.Millisecond,
+	})
 	if err := jobService.Start(ctx); err != nil {
 		logger.Error("job service failed to start", "error", err)
 		return err
 	}
 
-	airlineHandler := airline.NewHandler(func(ctx context.Context, payload json.RawMessage) (string, error) {
-		job, err := jobService.Publish(ctx, payload)
-		if err != nil {
-			return "", err
-		}
-		return job.ID, nil
-	})
+	airlineHandler := airline.NewHandler(jobService.Publish)
 	healthHandler := health.NewHandler()
 	server := &http.Server{
 		Addr:    cfg.Address,

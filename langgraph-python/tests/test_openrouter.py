@@ -10,10 +10,18 @@ from app.platform.llm import OpenRouterLLM
 def settings() -> Settings:
     return Settings(
         address="0.0.0.0:8080",
+        log_level="INFO",
         database_url="postgresql://unused",
         redis_url="redis://unused",
         rabbitmq_url="amqp://unused",
         rabbitmq_queue="jobs",
+        worker_concurrency=1,
+        job_max_attempts=3,
+        job_retry_base_ms=1000,
+        job_lock_ttl_ms=300000,
+        run_migrations=True,
+        llm_max_connections=7,
+        llm_timeout_seconds=60,
         max_open_conns=1,
         max_idle_conns=1,
         conn_max_lifetime_minutes=1,
@@ -57,3 +65,14 @@ class OpenRouterTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             await adapter.understand_request("Change ABC123")
         await adapter.close()
+
+
+class OpenRouterLimitsTests(unittest.IsolatedAsyncioTestCase):
+    async def test_default_client_uses_configured_connection_limit(self):
+        adapter = OpenRouterLLM(settings())
+        try:
+            pool = adapter._client._transport._pool
+            self.assertEqual(pool._max_connections, 7)
+            self.assertEqual(pool._max_keepalive_connections, 7)
+        finally:
+            await adapter.close()
