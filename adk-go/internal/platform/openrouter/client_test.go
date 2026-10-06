@@ -24,14 +24,18 @@ func TestGenerateContent(t *testing.T) {
 		}
 
 		var request struct {
-			Model    string        `json:"model"`
-			Messages []chatMessage `json:"messages"`
+			Model          string         `json:"model"`
+			Messages       []chatMessage  `json:"messages"`
+			ResponseFormat responseFormat `json:"response_format"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			t.Fatalf("decode request: %v", err)
 		}
 		if request.Model != "test-model" {
 			t.Errorf("model = %q", request.Model)
+		}
+		if request.ResponseFormat.Type != "json_object" {
+			t.Errorf("response_format = %+v, want json_object", request.ResponseFormat)
 		}
 		if len(request.Messages) != 2 || request.Messages[0].Role != "user" || request.Messages[1].Role != "assistant" {
 			t.Errorf("messages = %+v", request.Messages)

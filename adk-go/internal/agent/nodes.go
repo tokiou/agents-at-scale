@@ -198,10 +198,11 @@ func newEvaluateOptionsNode(logger *slog.Logger, llm model.LLM) workflow.Node {
 				return EvaluationResult{}, fmt.Errorf("evaluate options travel credits result is required")
 			}
 
+			// Same {"request", "options", "credits"} payload as the LangGraph runtime.
 			payload, err := json.Marshal(struct {
-				Request RebookingRequest
-				Options []airline.RebookingOption
-				Credits []airline.TravelCredit
+				Request RebookingRequest          `json:"request"`
+				Options []airline.RebookingOption `json:"options"`
+				Credits []airline.TravelCredit    `json:"credits"`
 			}{
 				Request: search.Request,
 				Options: search.Options,

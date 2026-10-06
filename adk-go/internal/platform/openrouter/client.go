@@ -86,9 +86,14 @@ func (c *Client) GenerateContent(ctx context.Context, req *model.LLMRequest, str
 }
 
 type chatCompletionRequest struct {
-	Model    string        `json:"model"`
-	Messages []chatMessage `json:"messages"`
-	Stream   bool          `json:"stream"`
+	Model          string         `json:"model"`
+	Messages       []chatMessage  `json:"messages"`
+	Stream         bool           `json:"stream"`
+	ResponseFormat responseFormat `json:"response_format"`
+}
+
+type responseFormat struct {
+	Type string `json:"type"`
 }
 
 type chatMessage struct {
@@ -130,9 +135,11 @@ func (c *Client) generateContent(ctx context.Context, req *model.LLMRequest) (*m
 		messages = append(messages, chatMessage{Role: role, Content: text})
 	}
 
+	// Every agent call expects a JSON object, as in the LangGraph runtime.
 	payload, err := json.Marshal(chatCompletionRequest{
-		Model:    c.deployment,
-		Messages: messages,
+		Model:          c.deployment,
+		Messages:       messages,
+		ResponseFormat: responseFormat{Type: "json_object"},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("encode OpenRouter request: %w", err)

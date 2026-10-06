@@ -15,6 +15,7 @@ type Config struct {
 	OpenRouterBaseURL string
 	DatabaseURL       string
 	RedisURL          string
+	RedisPoolSize     int
 	RabbitMQURL       string
 	RabbitMQQueue     string
 	WorkerConcurrency int
@@ -45,6 +46,7 @@ func Load() Config {
 		OpenRouterBaseURL: envOrDefault("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
 		DatabaseURL:       envOrDefault("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/agents_at_scale?sslmode=disable"),
 		RedisURL:          envOrDefault("REDIS_URL", "redis://localhost:6379/0"),
+		RedisPoolSize:     envIntOrDefault("REDIS_POOL_SIZE", 50),
 		RabbitMQURL:       envOrDefault("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/"),
 		RabbitMQQueue:     envOrDefault("RABBITMQ_QUEUE", "agent_jobs"),
 		WorkerConcurrency: envIntOrDefault("WORKER_CONCURRENCY", 1),

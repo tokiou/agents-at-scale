@@ -32,12 +32,12 @@ type TravelCreditsResult struct {
 }
 
 type EvaluationResult struct {
-	Request           RebookingRequest
-	Options           []airline.RebookingOption
-	Credits           []airline.TravelCredit
-	RankedOptionIDs   []uuid.UUID `json:"ranked_option_ids"`
-	Summary           string      `json:"summary"`
-	HasMatchingOption bool        `json:"has_matching_option"`
+	Request           RebookingRequest          `json:"request"`
+	Options           []airline.RebookingOption `json:"options"`
+	Credits           []airline.TravelCredit    `json:"credits"`
+	RankedOptionIDs   []uuid.UUID               `json:"ranked_option_ids"`
+	Summary           string                    `json:"summary"`
+	HasMatchingOption bool                      `json:"has_matching_option"`
 }
 
 type ConfirmationResult struct {

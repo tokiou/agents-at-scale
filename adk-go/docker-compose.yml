@@ -4,6 +4,12 @@ x-app: &app
     dockerfile: Dockerfile
   env_file:
     - .env
+  # Same explicit file descriptor limit for both runtimes (Go raises its own
+  # soft limit at startup; Python keeps the container default of 1024).
+  ulimits:
+    nofile:
+      soft: 65536
+      hard: 65536
   depends_on: &infra
     postgres:
       condition: service_healthy

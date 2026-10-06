@@ -12,11 +12,14 @@ import (
 
 const statusTTL = 24 * time.Hour
 
-func New(ctx context.Context, rawURL string) (*redis.Client, error) {
+// New connects with at most poolSize connections, the same cap the Python
+// runtime uses, so neither runtime opens one connection per request.
+func New(ctx context.Context, rawURL string, poolSize int) (*redis.Client, error) {
 	options, err := redis.ParseURL(rawURL)
 	if err != nil {
 		return nil, fmt.Errorf("parse redis URL: %w", err)
 	}
+	options.PoolSize = poolSize
 
 	client := redis.NewClient(options)
 	if err := client.Ping(ctx).Err(); err != nil {

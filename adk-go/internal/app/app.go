@@ -8,6 +8,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os/signal"
+	goruntime "runtime"
 	"syscall"
 	"time"
 
@@ -28,7 +29,7 @@ import (
 func Run(cfg config.Config) error {
 	logger := platformlogger.New(cfg.LogFormat, cfg.LogLevel)
 	slog.SetDefault(logger)
-	logger.Info("application starting", "address", cfg.Address)
+	logger.Info("application starting", "address", cfg.Address, "gomaxprocs", goruntime.GOMAXPROCS(0))
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -95,7 +96,7 @@ func Run(cfg config.Config) error {
 		logger.Error("agent runner initialization failed", "error", err)
 		return err
 	}
-	redisClient, err := redisplatform.New(ctx, cfg.RedisURL)
+	redisClient, err := redisplatform.New(ctx, cfg.RedisURL, cfg.RedisPoolSize)
 	if err != nil {
 		logger.Error("redis initialization failed", "error", err)
 		return err

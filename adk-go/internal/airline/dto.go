@@ -46,11 +46,11 @@ type SearchRebookingOptionsInput struct {
 }
 
 type RebookingOption struct {
-	Flight         Flight
-	FareClass      FareClass
-	FlightFare     FlightFare
-	FareDifference decimal.Decimal
-	ChangeFee      decimal.Decimal
+	Flight         Flight          `json:"flight"`
+	FareClass      FareClass       `json:"fare_class"`
+	FlightFare     FlightFare      `json:"flight_fare"`
+	FareDifference decimal.Decimal `json:"fare_difference"`
+	ChangeFee      decimal.Decimal `json:"change_fee"`
 }
 
 type RebookingSelection struct {
