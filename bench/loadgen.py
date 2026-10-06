@@ -45,6 +45,10 @@ def ids(index: int, groups: int) -> dict[str, str]:
     }
 
 
+class SeedsExhausted(Exception):
+    """No seeded reservation left for a new conversation."""
+
+
 @dataclass
 class Conversation:
     index: int
@@ -189,7 +193,7 @@ class LoadGenerator:
 
     def take_index(self) -> int:
         if self.next_index > self.args.seeded:
-            raise RuntimeError("ran out of seeded reservations; seed more conversations")
+            raise SeedsExhausted("ran out of seeded reservations; seed more conversations")
         index = self.next_index
         self.next_index += self.step
         return index
@@ -245,7 +249,16 @@ class LoadGenerator:
 
         async def user() -> None:
             while time.time() < stop_at:
-                conversations.append(await self.conversation())
+                try:
+                    conv = await self.conversation()
+                except SeedsExhausted:
+                    print("warning: seeded reservations exhausted; user stops", flush=True)
+                    return
+                conversations.append(conv)
+                if not conv.ok:
+                    # Back off after a failure so an unavailable stack does not
+                    # turn every user into a tight loop burning reservations.
+                    await asyncio.sleep(1)
 
         await asyncio.sleep(max(0.0, level_start - time.time()))
         cpu_before = _process_cpu_seconds()
@@ -436,11 +449,13 @@ async def main() -> None:
     parser.add_argument("--seeded", type=int, required=True, help="seeded conversations available")
     parser.add_argument("--groups", type=int, default=100)
     parser.add_argument("--first-index", type=int, default=1)
-    parser.add_argument("--config", default="{}", help="JSON with the stack configuration, stored in the report")
+    parser.add_argument("--config", default="{}", help="JSON with the stack configuration (or @path to a JSON file)")
     parser.add_argument("--processes", type=int, default=4, help="generator processes sharing the users")
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
     args.run_id = uuid.uuid4().hex[:8]
+    if args.config.startswith("@"):
+        args.config = Path(args.config[1:]).read_text()
 
     context = multiprocessing.get_context("spawn")
     pipes, processes = [], []

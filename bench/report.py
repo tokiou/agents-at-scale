@@ -26,8 +26,29 @@ def capacity(levels: list[dict], slo_factor: float, max_error_rate: float) -> tu
     return best, slo_factor * baseline
 
 
+def cpu_ms_per_conversation(level: dict) -> float | None:
+    """Worker CPU time per completed conversation: mean worker CPU (percent
+    of one core) divided by throughput."""
+    cpu = level["services"].get("worker", {}).get("cpu_percent_mean")
+    throughput = level["throughput_conv_per_s"]
+    if not cpu or not throughput:
+        return None
+    return round(cpu * 10 / throughput, 1)
+
+
 def cell(value, suffix: str = "") -> str:
     return "-" if value is None else f"{value}{suffix}"
+
+
+def label(run: dict) -> str:
+    config = run.get("config", {})
+    llm = config.get("llm_model") if config.get("llm") == "openrouter" else "fake LLM"
+    processes = f", {config['worker_processes']} proc" if run["runtime"] == "python" and config.get("worker_processes") else ""
+    access = f", {config['data_access']}" if config.get("data_access") else ""
+    return (
+        f"{run['runtime']}{access}, {llm}, {config.get('worker_cpus', '?')} CPU{processes}, "
+        f"{config.get('worker_replicas', '?')} worker"
+    )
 
 
 def main() -> None:
@@ -39,26 +60,27 @@ def main() -> None:
 
     runs = [json.loads(Path(path).read_text()) for path in args.results]
     print("## Summary\n")
-    print("| runtime | capacity (concurrent conversations) | p95 SLO | peak throughput |")
-    print("| --- | --- | --- | --- |")
+    print("| run | capacity (concurrent conversations) | p95 SLO | peak throughput | worker CPU-ms per conversation |")
+    print("| --- | --- | --- | --- | --- |")
     for run in runs:
         users, slo = capacity(run["levels"], args.slo_factor, args.max_error_rate)
         peak = max(run["levels"], key=lambda level: level["throughput_conv_per_s"])
-        replicas = run.get("config", {}).get("worker_replicas", "?")
+        costs = [value for level in run["levels"] if (value := cpu_ms_per_conversation(level)) is not None]
         print(
-            f"| {run['runtime']} x{replicas} | {cell(users)} | {cell(round(slo) if slo else None, ' ms')} "
-            f"| {peak['throughput_conv_per_s']} conv/s at {peak['users']} users |"
+            f"| {label(run)} | {cell(users)} | {cell(round(slo) if slo else None, ' ms')} "
+            f"| {peak['throughput_conv_per_s']} conv/s at {peak['users']} users "
+            f"| {cell(min(costs) if costs else None, ' ms')} |"
         )
 
     for run in runs:
-        print(f"\n## {run['runtime']} ({run.get('config', {}).get('worker_replicas', '?')} worker replicas)\n")
+        print(f"\n## {label(run)}\n")
         print("Config: " + ", ".join(f"{key}={value}" for key, value in run.get("config", {}).items()) + "\n")
         print(
             "| users | ok | failed | thr conv/s | conv p50 | conv p95 | conv p99 | server p95 | client gap p95 "
             "| queue wait p95 | job exec p95 | retried | queue max | worker CPU mean/max | worker mem max "
-            "| api CPU max | postgres CPU max | generator CPU max |"
+            "| CPU-ms/conv | api CPU max | postgres CPU max | generator CPU max |"
         )
-        print("| " + " | ".join(["---"] * 18) + " |")
+        print("| " + " | ".join(["---"] * 19) + " |")
         for level in run["levels"]:
             services = level["services"]
             worker = services.get("worker", {})
@@ -74,6 +96,7 @@ def main() -> None:
                 f"| {cell(level['queue_ready_max'])} "
                 f"| {cell(worker.get('cpu_percent_mean'), '%')} / {cell(worker.get('cpu_percent_max'), '%')} "
                 f"| {cell(worker.get('mem_mib_max'), ' MiB')} "
+                f"| {cell(cpu_ms_per_conversation(level), ' ms')} "
                 f"| {cell(services.get('api', {}).get('cpu_percent_max'), '%')} "
                 f"| {cell(services.get('postgres', {}).get('cpu_percent_max'), '%')} "
                 f"| {cell(level.get('generator_cpu_percent'), '%')} |"

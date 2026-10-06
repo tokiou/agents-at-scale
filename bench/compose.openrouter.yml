@@ -1,0 +1,12 @@
+# Real LLM through OpenRouter for both runtimes; used by bench/run.sh with
+# BENCH_LLM=openrouter instead of docker-compose.fake-llm.yml. The key comes
+# from the environment (bench/run.sh reads it from the repository .env).
+x-openrouter: &openrouter
+  environment:
+    OPENROUTER_DEPLOYMENT: ${BENCH_LLM_MODEL:?set BENCH_LLM_MODEL}
+    OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?set OPENROUTER_API_KEY}
+    OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+
+services:
+  api: *openrouter
+  worker: *openrouter
