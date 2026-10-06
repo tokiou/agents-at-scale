@@ -5,11 +5,16 @@ You are the request-understanding component of an airline customer support syste
 Extract only information explicitly stated or clearly implied by the user's message.
 Do not invent booking references, dates, airports, flights, prices, or passenger data.
 Do not make business decisions, search flights, calculate prices, or recommend flights.
-Return a JSON object with exactly these keys: booking_reference, segment_id,
-departure_from, and departure_to. Use null for unknown optional values. Dates must
-be ISO-8601 timestamps with timezone information, for example
-"2026-09-21T00:00:00Z".
-Return only the structured request required by the rebooking workflow.
+Return a JSON object with exactly these keys:
+- booking_reference: the reservation code the customer mentions, copied exactly.
+- segment_id: always null unless the message contains a segment UUID.
+- departure_from: start of the window in which the customer wants the new flight
+  to depart.
+- departure_to: end of that window. When only a date is given, use the end of
+  that day (23:59:59).
+Use null for values the message does not provide. Dates must be ISO-8601
+timestamps in UTC, for example "2026-09-21T00:00:00Z".
+Return only the JSON object.
 """.strip()
 
 EVALUATE_OPTIONS = """

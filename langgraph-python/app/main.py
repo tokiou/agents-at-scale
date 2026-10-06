@@ -8,12 +8,13 @@ from app.jobs import router as jobs_router
 from app.jobs.service import JobService, WorkerOptions
 from app.agent.graph import build_graph
 from app.agent.runner import AgentRunner
-from app.airline.repository.customer import CustomerRepository
-from app.airline.repository.flight import FlightRepository
-from app.airline.repository.flight_change import FlightChangeRepository
-from app.airline.repository.rebooking import RebookingRepository
-from app.airline.repository.reservation import ReservationRepository
-from app.airline.repository.travel_credit import TravelCreditRepository
+from app.airline.repository import customer, flight, flight_change, rebooking, reservation, travel_credit
+from app.airline.repository.sql import customer as sql_customer
+from app.airline.repository.sql import flight as sql_flight
+from app.airline.repository.sql import flight_change as sql_flight_change
+from app.airline.repository.sql import rebooking as sql_rebooking
+from app.airline.repository.sql import reservation as sql_reservation
+from app.airline.repository.sql import travel_credit as sql_travel_credit
 from app.airline.service import Service
 from app.platform.postgres import create_session_factory
 from app.platform.llm import OpenRouterLLM
@@ -21,7 +22,7 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 from app.config import load_settings
-from app.platform.postgres import create_engine
+from app.platform.postgres import create_engine, create_pool
 from app.platform.rabbitmq import RabbitMQ
 from app.platform.redis import JobStore, create_client
 
@@ -31,26 +32,37 @@ logging.basicConfig(level=settings.log_level, format="%(asctime)s %(levelname)s 
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
-    engine = create_engine(settings)
+    engine = None
+    pg_pool = None
     redis = None
     rabbitmq = None
     job_service = None
     llm = None
     checkpoint_pool = None
     try:
-        async with engine.begin() as connection:
-            await connection.execute(text("SELECT 1"))
-        application.state.db = engine
-        sessions = create_session_factory(engine)
-        rebooking = RebookingRepository(sessions)
+        if settings.data_access == "asyncpg":
+            pg_pool = await create_pool(settings)
+            await pg_pool.fetchval("SELECT 1")
+            source, modules = pg_pool, (
+                sql_customer, sql_reservation, sql_flight, sql_travel_credit, sql_flight_change, sql_rebooking
+            )
+        else:
+            engine = create_engine(settings)
+            async with engine.begin() as connection:
+                await connection.execute(text("SELECT 1"))
+            source, modules = create_session_factory(engine), (
+                customer, reservation, flight, travel_credit, flight_change, rebooking
+            )
+        customers, reservations, flights, credits, changes, rebookings = modules
         airline_service = Service(
-            CustomerRepository(sessions),
-            ReservationRepository(sessions),
-            FlightRepository(sessions),
-            TravelCreditRepository(sessions),
-            FlightChangeRepository(sessions),
-            rebooking,
+            customers.CustomerRepository(source),
+            reservations.ReservationRepository(source),
+            flights.FlightRepository(source),
+            credits.TravelCreditRepository(source),
+            changes.FlightChangeRepository(source),
+            rebookings.RebookingRepository(source),
         )
+        logging.getLogger(__name__).info("airline data access: %s", settings.data_access)
         llm = OpenRouterLLM(settings)
         # A pool lets concurrent jobs checkpoint without sharing one connection.
         checkpoint_pool = AsyncConnectionPool(
@@ -98,7 +110,10 @@ async def lifespan(application: FastAPI):
             await checkpoint_pool.close()
         if redis is not None:
             await redis.aclose()
-        await engine.dispose()
+        if pg_pool is not None:
+            await pg_pool.close()
+        if engine is not None:
+            await engine.dispose()
 
 
 application = FastAPI(title="Agents at Scale - LangGraph", lifespan=lifespan)

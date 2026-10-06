@@ -1,7 +1,7 @@
-import json
 from datetime import datetime
 
-from redis.asyncio import Redis
+import orjson
+from redis.asyncio import BlockingConnectionPool, Redis
 
 from app.config import Settings
 
@@ -18,7 +18,15 @@ return 0
 
 
 async def create_client(settings: Settings) -> Redis:
-    client = Redis.from_url(settings.redis_url, decode_responses=True)
+    # Bounded pool, the same cap as the Go runtime: without it redis-py opens a
+    # new connection per concurrent command and can exhaust file descriptors.
+    pool = BlockingConnectionPool.from_url(
+        settings.redis_url,
+        max_connections=settings.redis_pool_size,
+        timeout=10,
+        decode_responses=True,
+    )
+    client = Redis(connection_pool=pool)
     await client.ping()
     return client
 
@@ -40,7 +48,7 @@ class JobStore:
         """Store HITL resume data without changing the status-key contract."""
         await self._client.set(
             f"job:{job_id}:metadata",
-            json.dumps(metadata, default=str),
+            orjson.dumps(metadata, default=str),
             ex=STATUS_TTL_SECONDS,
         )
 

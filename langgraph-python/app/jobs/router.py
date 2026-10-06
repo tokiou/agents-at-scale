@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Body, Header, HTTPException, Request
@@ -5,6 +6,8 @@ from pydantic import BaseModel, ValidationError, model_validator
 
 from app.airline.schemas import RebookingSelectionSchema
 from app.jobs.service import JobService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/airline/chat")
 
@@ -65,5 +68,6 @@ async def publish_chat(
     try:
         job_id, duplicate = await service.publish(chat.model_dump(mode="json", exclude_none=True), key or None)
     except Exception as error:
+        logger.exception("publish job failed")
         raise HTTPException(status_code=500, detail="publish job failed") from error
     return {"id": job_id, "status": "duplicate" if duplicate else "published"}

@@ -1,9 +1,9 @@
 """Small async OpenRouter adapter for structured agent responses."""
 
-import json
 from typing import Any
 
 import httpx
+import orjson
 
 from app.agent.prompts import EVALUATE_OPTIONS, UNDERSTAND_REQUEST
 from app.agent.state import EvaluationResult, RebookingRequest
@@ -44,7 +44,8 @@ class OpenRouterLLM:
             "options": [item.model_dump(mode="json") for item in options],
             "credits": [item.model_dump(mode="json") for item in credits],
         }
-        response = await self._complete(EVALUATE_OPTIONS, json.dumps(payload))
+        # Compact JSON, byte-for-byte the same shape the Go runtime sends.
+        response = await self._complete(EVALUATE_OPTIONS, orjson.dumps(payload).decode())
         result = EvaluationResult.model_validate(
             {
                 **response,
@@ -67,21 +68,24 @@ class OpenRouterLLM:
                 "Authorization": f"Bearer {self._settings.openrouter_api_key}",
                 "Content-Type": "application/json",
             },
-            json={
-                "model": self._settings.openrouter_deployment,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                "response_format": {"type": "json_object"},
-            },
+            content=orjson.dumps(
+                {
+                    "model": self._settings.openrouter_deployment,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    "stream": False,
+                    "response_format": {"type": "json_object"},
+                }
+            ),
         )
         response.raise_for_status()
         try:
-            body = response.json()
+            body = orjson.loads(response.content)
             content = body["choices"][0]["message"]["content"]
             if isinstance(content, list):
                 content = "".join(part.get("text", "") for part in content)
-            return json.loads(content)
-        except (KeyError, IndexError, TypeError, json.JSONDecodeError) as exc:
+            return orjson.loads(content)
+        except (KeyError, IndexError, TypeError, orjson.JSONDecodeError) as exc:
             raise ValueError("OpenRouter returned an invalid structured response") from exc

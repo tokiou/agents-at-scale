@@ -1,8 +1,8 @@
-import json
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
 
 import aio_pika
+import orjson
 from aio_pika import DeliveryMode, IncomingMessage, Message
 
 from app.config import Settings
@@ -76,7 +76,7 @@ class RabbitMQ:
     async def _publish(self, routing_key: str, job: Job) -> None:
         body = {key: value for key, value in asdict(job).items() if value is not None}
         message = Message(
-            json.dumps(body).encode(),
+            orjson.dumps(body),
             content_type="application/json",
             delivery_mode=DeliveryMode.PERSISTENT,
         )

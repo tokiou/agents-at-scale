@@ -90,7 +90,8 @@ handler.Register(router)
 
 - PostgreSQL is the persistent store and is accessed through the module repository.
 - Go repositories use `pgx` through generated `sqlc` code. SQL belongs in `adk-go/db/query` and generated files under `adk-go/internal/platform/postgres/sqlc` must not be edited manually.
-- Python repositories use SQLAlchemy 2.x async with `asyncpg`; do not add raw SQL strings for airline queries.
+- Python repositories use SQLAlchemy 2.x async with `asyncpg` by default; do not add raw SQL strings to them.
+- The only exception is the benchmark variant under `langgraph-python/app/airline/repository/sql` (selected with `DATA_ACCESS=asyncpg`): hand-written SQL that mirrors each `adk-go/db/query` statement one to one. Keep both in sync when a query changes.
 - Redis is for ephemeral state, idempotency, job status and coordination.
 - RabbitMQ is the durable job transport.
 - Job consumers must acknowledge messages only after successful processing.

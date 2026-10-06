@@ -1,9 +1,10 @@
-import json
 import logging
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any, Protocol
 from uuid import uuid4
+
+import orjson
 
 from app.agent.runner import NoPendingInputError
 from app.platform.rabbitmq import Job
@@ -137,7 +138,7 @@ class JobService:
 
     async def consume(self, message) -> None:
         try:
-            data = json.loads(message.body.decode())
+            data = orjson.loads(message.body)
             job = Job(**data)
             if not job.id:
                 raise ValueError("job id is required")

@@ -8,6 +8,7 @@ x-bench-env: &bench-env
   REDIS_URL: redis://redis:6379/0
   RABBITMQ_URL: amqp://agents:agents@rabbitmq:5672/
   RABBITMQ_QUEUE: agent_jobs_bench
+  DATA_ACCESS: ${DATA_ACCESS:-orm}
   DB_MAX_OPEN_CONNS: ${BENCH_DB_POOL:-50}
   DB_MAX_IDLE_CONNS: ${BENCH_DB_POOL:-50}
   LLM_MAX_CONNECTIONS: ${BENCH_LLM_CONNECTIONS:-500}

@@ -8,9 +8,11 @@ class Settings:
     log_level: str
     database_url: str
     redis_url: str
+    redis_pool_size: int
     rabbitmq_url: str
     rabbitmq_queue: str
     worker_concurrency: int
+    data_access: str
     job_max_attempts: int
     job_retry_base_ms: int
     job_lock_ttl_ms: int
@@ -41,11 +43,13 @@ def load_settings() -> Settings:
             "postgresql://postgres:postgres@localhost:5432/agents_at_scale",
         ),
         redis_url=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+        redis_pool_size=_env_int("REDIS_POOL_SIZE", 50, minimum=1),
         rabbitmq_url=os.getenv(
             "RABBITMQ_URL", "amqp://guest:guest@localhost:5672/"
         ),
         rabbitmq_queue=os.getenv("RABBITMQ_QUEUE", "agent_jobs"),
         worker_concurrency=_env_int("WORKER_CONCURRENCY", 1),
+        data_access=_data_access(os.getenv("DATA_ACCESS", "orm")),
         job_max_attempts=_env_int("JOB_MAX_ATTEMPTS", 3),
         job_retry_base_ms=_env_int("JOB_RETRY_BASE_MS", 1000),
         job_lock_ttl_ms=_env_int("JOB_LOCK_TTL_MS", 300_000),
@@ -69,3 +73,11 @@ def _env_int(name: str, default: int, minimum: int = 0) -> int:
     except ValueError:
         return default
     return value if value >= minimum else default
+
+
+def _data_access(value: str) -> str:
+    """orm (SQLAlchemy ORM, default) or asyncpg (hand-written SQL that mirrors
+    the Go runtime's sqlc queries)."""
+    if value not in ("orm", "asyncpg"):
+        raise ValueError(f"DATA_ACCESS must be orm or asyncpg, got {value!r}")
+    return value
