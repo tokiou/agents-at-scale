@@ -1,0 +1,654 @@
+{
+  "runtime": "python",
+  "config": {
+    "llm": "fake",
+    "llm_model": "fake-llm",
+    "worker_processes": 1,
+    "fake_llm_latency_ms": 715,
+    "fake_llm_jitter_ms": 840,
+    "worker_replicas": 1,
+    "worker_cpus": "1",
+    "worker_memory": "2g",
+    "api_cpus": "1",
+    "worker_concurrency": 1000,
+    "db_pool": 50,
+    "llm_connections": 2000,
+    "postgres_max_connections": 600,
+    "seeded": 200000
+  },
+  "levels": [
+    {
+      "users": 1,
+      "warmup_s": 10.0,
+      "duration_s": 60.0,
+      "conversations_measured": 25,
+      "conversations_ok": 25,
+      "conversations_failed": 0,
+      "error_rate": 0.0,
+      "throughput_conv_per_s": 0.42,
+      "conversation_ms": {
+        "p50": 2281,
+        "p95": 2859,
+        "p99": 2893,
+        "mean": 2340.2,
+        "max": 2893
+      },
+      "server_conversation_ms": {
+        "p50": 2259,
+        "p95": 2808,
+        "p99": 2839,
+        "mean": 2307.9,
+        "max": 2839
+      },
+      "client_gap_ms": {
+        "p50": 33,
+        "p95": 53,
+        "p99": 54,
+        "mean": 32.3,
+        "max": 54
+      },
+      "client_conversation_ms": {
+        "p50": 2318.9,
+        "p95": 2874.0,
+        "p99": 2906.9,
+        "mean": 2363.9,
+        "max": 2906.9
+      },
+      "job_queue_wait_ms": {
+        "p50": 2,
+        "p95": 4,
+        "p99": 4,
+        "mean": 1.9,
+        "max": 4
+      },
+      "job_execution_ms": {
+        "p50": 1551,
+        "p95": 2746,
+        "p99": 2803,
+        "mean": 1152.0,
+        "max": 2803
+      },
+      "retried_jobs": 0,
+      "queue_ready_max": 0,
+      "queue_unacked_max": 1,
+      "services": {
+        "api": {
+          "cpu_percent_mean": 0.8,
+          "cpu_percent_max": 5.6,
+          "mem_mib_max": 148.6
+        },
+        "fake-llm": {
+          "cpu_percent_mean": 2.5,
+          "cpu_percent_max": 5.8,
+          "mem_mib_max": 12.2
+        },
+        "postgres": {
+          "cpu_percent_mean": 1.1,
+          "cpu_percent_max": 2.7,
+          "mem_mib_max": 710.6
+        },
+        "rabbitmq": {
+          "cpu_percent_mean": 8.1,
+          "cpu_percent_max": 38.3,
+          "mem_mib_max": 91.8
+        },
+        "redis": {
+          "cpu_percent_mean": 1.1,
+          "cpu_percent_max": 2.3,
+          "mem_mib_max": 4.0
+        },
+        "worker": {
+          "cpu_percent_mean": 2.3,
+          "cpu_percent_max": 4.3,
+          "mem_mib_max": 100.9
+        }
+      },
+      "errors": {},
+      "generator_processes": 6,
+      "generator_cpu_percent": 7.9
+    },
+    {
+      "users": 50,
+      "warmup_s": 10.0,
+      "duration_s": 60.0,
+      "conversations_measured": 1273,
+      "conversations_ok": 1273,
+      "conversations_failed": 0,
+      "error_rate": 0.0,
+      "throughput_conv_per_s": 21.22,
+      "conversation_ms": {
+        "p50": 2320,
+        "p95": 2927,
+        "p99": 3086,
+        "mean": 2336.5,
+        "max": 3172
+      },
+      "server_conversation_ms": {
+        "p50": 2293,
+        "p95": 2903,
+        "p99": 3074,
+        "mean": 2311.6,
+        "max": 3129
+      },
+      "client_gap_ms": {
+        "p50": 25,
+        "p95": 50,
+        "p99": 52,
+        "mean": 24.9,
+        "max": 53
+      },
+      "client_conversation_ms": {
+        "p50": 2341.1,
+        "p95": 2950.2,
+        "p99": 3107.0,
+        "mean": 2360.9,
+        "max": 3203.9
+      },
+      "job_queue_wait_ms": {
+        "p50": 1,
+        "p95": 3,
+        "p99": 4,
+        "mean": 1.5,
+        "max": 36
+      },
+      "job_execution_ms": {
+        "p50": 1434,
+        "p95": 2758,
+        "p99": 2979,
+        "mean": 1154.3,
+        "max": 3079
+      },
+      "retried_jobs": 0,
+      "queue_ready_max": 0,
+      "queue_unacked_max": 50,
+      "services": {
+        "api": {
+          "cpu_percent_mean": 3.1,
+          "cpu_percent_max": 6.0,
+          "mem_mib_max": 149.4
+        },
+        "fake-llm": {
+          "cpu_percent_mean": 3.4,
+          "cpu_percent_max": 5.8,
+          "mem_mib_max": 16.3
+        },
+        "postgres": {
+          "cpu_percent_mean": 11.0,
+          "cpu_percent_max": 12.7,
+          "mem_mib_max": 957.5
+        },
+        "rabbitmq": {
+          "cpu_percent_mean": 9.9,
+          "cpu_percent_max": 40.4,
+          "mem_mib_max": 108.4
+        },
+        "redis": {
+          "cpu_percent_mean": 1.5,
+          "cpu_percent_max": 2.1,
+          "mem_mib_max": 9.3
+        },
+        "worker": {
+          "cpu_percent_mean": 47.6,
+          "cpu_percent_max": 54.0,
+          "mem_mib_max": 113.7
+        }
+      },
+      "errors": {},
+      "generator_processes": 6,
+      "generator_cpu_percent": 1.1
+    },
+    {
+      "users": 100,
+      "warmup_s": 10.0,
+      "duration_s": 60.0,
+      "conversations_measured": 2392,
+      "conversations_ok": 2392,
+      "conversations_failed": 0,
+      "error_rate": 0.0,
+      "throughput_conv_per_s": 39.87,
+      "conversation_ms": {
+        "p50": 2474,
+        "p95": 3075,
+        "p99": 3254,
+        "mean": 2476.3,
+        "max": 3599
+      },
+      "server_conversation_ms": {
+        "p50": 2445,
+        "p95": 3049,
+        "p99": 3237,
+        "mean": 2450.4,
+        "max": 3560
+      },
+      "client_gap_ms": {
+        "p50": 26,
+        "p95": 49,
+        "p99": 52,
+        "mean": 26.0,
+        "max": 53
+      },
+      "client_conversation_ms": {
+        "p50": 2487.3,
+        "p95": 3094.4,
+        "p99": 3292.3,
+        "mean": 2502.2,
+        "max": 3650.3
+      },
+      "job_queue_wait_ms": {
+        "p50": 2,
+        "p95": 5,
+        "p99": 33,
+        "mean": 2.9,
+        "max": 60
+      },
+      "job_execution_ms": {
+        "p50": 416,
+        "p95": 2779,
+        "p99": 2992,
+        "mean": 1222.3,
+        "max": 3249
+      },
+      "retried_jobs": 0,
+      "queue_ready_max": 0,
+      "queue_unacked_max": 100,
+      "services": {
+        "api": {
+          "cpu_percent_mean": 5.5,
+          "cpu_percent_max": 8.3,
+          "mem_mib_max": 151.7
+        },
+        "fake-llm": {
+          "cpu_percent_mean": 4.7,
+          "cpu_percent_max": 7.5,
+          "mem_mib_max": 17.6
+        },
+        "postgres": {
+          "cpu_percent_mean": 23.2,
+          "cpu_percent_max": 49.0,
+          "mem_mib_max": 1273.9
+        },
+        "rabbitmq": {
+          "cpu_percent_mean": 11.7,
+          "cpu_percent_max": 44.0,
+          "mem_mib_max": 94.6
+        },
+        "redis": {
+          "cpu_percent_mean": 2.4,
+          "cpu_percent_max": 2.9,
+          "mem_mib_max": 19.3
+        },
+        "worker": {
+          "cpu_percent_mean": 94.0,
+          "cpu_percent_max": 98.8,
+          "mem_mib_max": 122.6
+        }
+      },
+      "errors": {},
+      "generator_processes": 6,
+      "generator_cpu_percent": 1.5
+    },
+    {
+      "users": 200,
+      "warmup_s": 10.0,
+      "duration_s": 60.0,
+      "conversations_measured": 2410,
+      "conversations_ok": 2410,
+      "conversations_failed": 0,
+      "error_rate": 0.0,
+      "throughput_conv_per_s": 40.17,
+      "conversation_ms": {
+        "p50": 4979,
+        "p95": 5482,
+        "p99": 5779,
+        "mean": 4941.5,
+        "max": 6119
+      },
+      "server_conversation_ms": {
+        "p50": 4954,
+        "p95": 5453,
+        "p99": 5756,
+        "mean": 4915.2,
+        "max": 6071
+      },
+      "client_gap_ms": {
+        "p50": 26,
+        "p95": 50,
+        "p99": 53,
+        "mean": 26.3,
+        "max": 56
+      },
+      "client_conversation_ms": {
+        "p50": 5015.5,
+        "p95": 5526.4,
+        "p99": 5797.9,
+        "mean": 4968.3,
+        "max": 6142.1
+      },
+      "job_queue_wait_ms": {
+        "p50": 3,
+        "p95": 9,
+        "p99": 69,
+        "mean": 4.5,
+        "max": 94
+      },
+      "job_execution_ms": {
+        "p50": 2376,
+        "p95": 3469,
+        "p99": 3701,
+        "mean": 2453.1,
+        "max": 4097
+      },
+      "retried_jobs": 0,
+      "queue_ready_max": 0,
+      "queue_unacked_max": 200,
+      "services": {
+        "api": {
+          "cpu_percent_mean": 4.9,
+          "cpu_percent_max": 11.9,
+          "mem_mib_max": 154.9
+        },
+        "fake-llm": {
+          "cpu_percent_mean": 5.3,
+          "cpu_percent_max": 10.1,
+          "mem_mib_max": 33.7
+        },
+        "postgres": {
+          "cpu_percent_mean": 22.4,
+          "cpu_percent_max": 36.6,
+          "mem_mib_max": 1732.6
+        },
+        "rabbitmq": {
+          "cpu_percent_mean": 6.3,
+          "cpu_percent_max": 39.2,
+          "mem_mib_max": 99.2
+        },
+        "redis": {
+          "cpu_percent_mean": 2.4,
+          "cpu_percent_max": 4.0,
+          "mem_mib_max": 30.1
+        },
+        "worker": {
+          "cpu_percent_mean": 95.0,
+          "cpu_percent_max": 98.8,
+          "mem_mib_max": 155.3
+        }
+      },
+      "errors": {},
+      "generator_processes": 6,
+      "generator_cpu_percent": 1.6
+    },
+    {
+      "users": 400,
+      "warmup_s": 10.0,
+      "duration_s": 60.0,
+      "conversations_measured": 2426,
+      "conversations_ok": 2426,
+      "conversations_failed": 0,
+      "error_rate": 0.0,
+      "throughput_conv_per_s": 40.43,
+      "conversation_ms": {
+        "p50": 9530,
+        "p95": 9998,
+        "p99": 10222,
+        "mean": 9558.9,
+        "max": 10505
+      },
+      "server_conversation_ms": {
+        "p50": 9497,
+        "p95": 9974,
+        "p99": 10203,
+        "mean": 9530.6,
+        "max": 10488
+      },
+      "client_gap_ms": {
+        "p50": 27,
+        "p95": 53,
+        "p99": 58,
+        "mean": 28.3,
+        "max": 85
+      },
+      "client_conversation_ms": {
+        "p50": 9558.6,
+        "p95": 10027.6,
+        "p99": 10240.9,
+        "mean": 9587.0,
+        "max": 10540.7
+      },
+      "job_queue_wait_ms": {
+        "p50": 6,
+        "p95": 21,
+        "p99": 115,
+        "mean": 9.6,
+        "max": 156
+      },
+      "job_execution_ms": {
+        "p50": 4779,
+        "p95": 5099,
+        "p99": 5463,
+        "mean": 4755.7,
+        "max": 6340
+      },
+      "retried_jobs": 0,
+      "queue_ready_max": 0,
+      "queue_unacked_max": 400,
+      "services": {
+        "api": {
+          "cpu_percent_mean": 5.1,
+          "cpu_percent_max": 18.8,
+          "mem_mib_max": 160.8
+        },
+        "fake-llm": {
+          "cpu_percent_mean": 4.4,
+          "cpu_percent_max": 12.2,
+          "mem_mib_max": 34.3
+        },
+        "postgres": {
+          "cpu_percent_mean": 21.2,
+          "cpu_percent_max": 27.3,
+          "mem_mib_max": 2069.5
+        },
+        "rabbitmq": {
+          "cpu_percent_mean": 8.5,
+          "cpu_percent_max": 38.2,
+          "mem_mib_max": 163.3
+        },
+        "redis": {
+          "cpu_percent_mean": 3.6,
+          "cpu_percent_max": 8.6,
+          "mem_mib_max": 42.3
+        },
+        "worker": {
+          "cpu_percent_mean": 97.6,
+          "cpu_percent_max": 100.2,
+          "mem_mib_max": 205.9
+        }
+      },
+      "errors": {},
+      "generator_processes": 6,
+      "generator_cpu_percent": 1.9
+    },
+    {
+      "users": 800,
+      "warmup_s": 10.0,
+      "duration_s": 60.0,
+      "conversations_measured": 2400,
+      "conversations_ok": 2400,
+      "conversations_failed": 0,
+      "error_rate": 0.0,
+      "throughput_conv_per_s": 40.0,
+      "conversation_ms": {
+        "p50": 20046,
+        "p95": 21063,
+        "p99": 21094,
+        "mean": 20276.3,
+        "max": 21183
+      },
+      "server_conversation_ms": {
+        "p50": 20006,
+        "p95": 21023,
+        "p99": 21058,
+        "mean": 20237.2,
+        "max": 21159
+      },
+      "client_gap_ms": {
+        "p50": 40,
+        "p95": 63,
+        "p99": 80,
+        "mean": 39.1,
+        "max": 118
+      },
+      "client_conversation_ms": {
+        "p50": 20079.0,
+        "p95": 21122.5,
+        "p99": 21127.8,
+        "mean": 20315.9,
+        "max": 21234.5
+      },
+      "job_queue_wait_ms": {
+        "p50": 3,
+        "p95": 21,
+        "p99": 235,
+        "mean": 10.5,
+        "max": 284
+      },
+      "job_execution_ms": {
+        "p50": 10070,
+        "p95": 10843,
+        "p99": 10909,
+        "mean": 10108.1,
+        "max": 10931
+      },
+      "retried_jobs": 0,
+      "queue_ready_max": 0,
+      "queue_unacked_max": 800,
+      "services": {
+        "api": {
+          "cpu_percent_mean": 5.2,
+          "cpu_percent_max": 23.5,
+          "mem_mib_max": 171.8
+        },
+        "fake-llm": {
+          "cpu_percent_mean": 4.7,
+          "cpu_percent_max": 11.9,
+          "mem_mib_max": 38.9
+        },
+        "postgres": {
+          "cpu_percent_mean": 20.4,
+          "cpu_percent_max": 38.2,
+          "mem_mib_max": 2260.0
+        },
+        "rabbitmq": {
+          "cpu_percent_mean": 13.8,
+          "cpu_percent_max": 59.4,
+          "mem_mib_max": 180.8
+        },
+        "redis": {
+          "cpu_percent_mean": 3.4,
+          "cpu_percent_max": 12.8,
+          "mem_mib_max": 52.3
+        },
+        "worker": {
+          "cpu_percent_mean": 97.2,
+          "cpu_percent_max": 100.1,
+          "mem_mib_max": 295.1
+        }
+      },
+      "errors": {},
+      "generator_processes": 6,
+      "generator_cpu_percent": 2.7
+    },
+    {
+      "users": 1600,
+      "warmup_s": 10.0,
+      "duration_s": 60.0,
+      "conversations_measured": 2268,
+      "conversations_ok": 2193,
+      "conversations_failed": 75,
+      "error_rate": 0.0331,
+      "throughput_conv_per_s": 26.67,
+      "conversation_ms": {
+        "p50": 39710,
+        "p95": 50914,
+        "p99": 51018,
+        "mean": 39878.9,
+        "max": 51110
+      },
+      "server_conversation_ms": {
+        "p50": 39672,
+        "p95": 50881,
+        "p99": 50994,
+        "mean": 39845.7,
+        "max": 51064
+      },
+      "client_gap_ms": {
+        "p50": 33,
+        "p95": 57,
+        "p99": 64,
+        "mean": 33.2,
+        "max": 76
+      },
+      "client_conversation_ms": {
+        "p50": 39734.9,
+        "p95": 50942.3,
+        "p99": 51062.9,
+        "mean": 39939.9,
+        "max": 51132.1
+      },
+      "job_queue_wait_ms": {
+        "p50": 9416,
+        "p95": 11817,
+        "p99": 12977,
+        "mean": 7629.0,
+        "max": 13116
+      },
+      "job_execution_ms": {
+        "p50": 12754,
+        "p95": 15635,
+        "p99": 16950,
+        "mean": 12293.9,
+        "max": 19239
+      },
+      "retried_jobs": 0,
+      "queue_ready_max": 600,
+      "queue_unacked_max": 1000,
+      "services": {
+        "api": {
+          "cpu_percent_mean": 6.1,
+          "cpu_percent_max": 37.8,
+          "mem_mib_max": 178.2
+        },
+        "fake-llm": {
+          "cpu_percent_mean": 6.0,
+          "cpu_percent_max": 13.4,
+          "mem_mib_max": 34.8
+        },
+        "postgres": {
+          "cpu_percent_mean": 19.7,
+          "cpu_percent_max": 46.8,
+          "mem_mib_max": 2400.3
+        },
+        "rabbitmq": {
+          "cpu_percent_mean": 12.8,
+          "cpu_percent_max": 46.0,
+          "mem_mib_max": 178.2
+        },
+        "redis": {
+          "cpu_percent_mean": 3.7,
+          "cpu_percent_max": 11.0,
+          "mem_mib_max": 64.0
+        },
+        "worker": {
+          "cpu_percent_mean": 98.2,
+          "cpu_percent_max": 102.1,
+          "mem_mib_max": 324.3
+        }
+      },
+      "errors": {
+        "HTTPStatusError: Server error '500 Internal Server Error' for url 'http://127.0.0.1:28081/airline/chat'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500": 73,
+        "RemoteProtocolError: Server disconnected without sending a response.": 2
+      },
+      "generator_processes": 6,
+      "generator_cpu_percent": 13.5
+    }
+  ]
+}

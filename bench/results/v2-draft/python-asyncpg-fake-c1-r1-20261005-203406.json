@@ -1,0 +1,112 @@
+{
+  "runtime": "python",
+  "config": {
+    "data_access": "asyncpg",
+    "llm": "fake",
+    "llm_model": "fake-llm",
+    "worker_processes": 1,
+    "fake_llm_latency_ms": 715,
+    "fake_llm_jitter_ms": 840,
+    "worker_replicas": 1,
+    "worker_cpus": "1",
+    "worker_memory": "2g",
+    "api_cpus": "1",
+    "worker_concurrency": 1000,
+    "db_pool": 50,
+    "llm_connections": 2000,
+    "postgres_max_connections": 600,
+    "seeded": 60000
+  },
+  "levels": [
+    {
+      "users": 1600,
+      "warmup_s": 10.0,
+      "duration_s": 30.0,
+      "conversations_measured": 1600,
+      "conversations_ok": 1600,
+      "conversations_failed": 0,
+      "error_rate": 0.0,
+      "throughput_conv_per_s": 53.33,
+      "conversation_ms": {
+        "p50": 26248,
+        "p95": 31024,
+        "p99": 35558,
+        "mean": 25910.3,
+        "max": 35569
+      },
+      "server_conversation_ms": {
+        "p50": 26214,
+        "p95": 30979,
+        "p99": 35528,
+        "mean": 25876.8,
+        "max": 35546
+      },
+      "client_gap_ms": {
+        "p50": 33,
+        "p95": 57,
+        "p99": 63,
+        "mean": 33.5,
+        "max": 77
+      },
+      "client_conversation_ms": {
+        "p50": 26294.1,
+        "p95": 31040.1,
+        "p99": 35607.8,
+        "mean": 25942.9,
+        "max": 35611.9
+      },
+      "job_queue_wait_ms": {
+        "p50": 4404,
+        "p95": 9520,
+        "p99": 9945,
+        "mean": 4761.4,
+        "max": 9984
+      },
+      "job_execution_ms": {
+        "p50": 8712,
+        "p95": 11393,
+        "p99": 11434,
+        "mean": 8177.0,
+        "max": 11437
+      },
+      "retried_jobs": 0,
+      "queue_ready_max": 600,
+      "queue_unacked_max": 1000,
+      "services": {
+        "api": {
+          "cpu_percent_mean": 6.4,
+          "cpu_percent_max": 21.4,
+          "mem_mib_max": 143.9
+        },
+        "fake-llm": {
+          "cpu_percent_mean": 5.9,
+          "cpu_percent_max": 12.9,
+          "mem_mib_max": 37.1
+        },
+        "postgres": {
+          "cpu_percent_mean": 33.3,
+          "cpu_percent_max": 68.3,
+          "mem_mib_max": 851.5
+        },
+        "rabbitmq": {
+          "cpu_percent_mean": 5.7,
+          "cpu_percent_max": 24.1,
+          "mem_mib_max": 115.5
+        },
+        "redis": {
+          "cpu_percent_mean": 4.7,
+          "cpu_percent_max": 11.9,
+          "mem_mib_max": 12.1
+        },
+        "worker": {
+          "cpu_percent_mean": 89.1,
+          "cpu_percent_max": 101.0,
+          "mem_mib_max": 312.7
+        }
+      },
+      "errors": {},
+      "generator_processes": 6,
+      "generator_cpu_percent": 4.9
+    }
+  ]
+}
