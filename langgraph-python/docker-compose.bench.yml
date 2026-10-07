@@ -38,9 +38,16 @@ services:
       - ./db/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
     tmpfs:
       - /var/lib/postgresql/data
+  # Broker and cache state live in RAM like PostgreSQL's default tmpfs, so
+  # disk fsync latency (RabbitMQ persistent messages, Redis snapshots) does
+  # not stall the runtime under test.
   redis:
     ports: !override ["26380:6379"]
     volumes: !override []
+    tmpfs:
+      - /data
   rabbitmq:
     ports: !override ["25681:15672"]
     volumes: !override []
+    tmpfs:
+      - /var/lib/rabbitmq

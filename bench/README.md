@@ -18,9 +18,18 @@ VM port forwarding), so `BENCH_GENERATOR` stays at its default.
 
 ```bash
 python3 -m venv bench/.venv && bench/.venv/bin/pip install -r bench/requirements.txt
+sudo bench/linux-host.sh apply       # performance CPU, no background services/suspend
 bench/matrix.sh                      # Go, Python ORM, Python asyncpg on 1, 2, 4 CPUs
 BENCH_REPEATS=3 bench/matrix.sh      # three repetitions for run-to-run variation
+sudo bench/linux-host.sh restore
 ```
+
+`linux-host.sh` (Ubuntu desktop) also disables Docker's userland proxy so
+the generator reaches published ports through iptables instead of a proxy
+process. RabbitMQ and Redis always keep their data in tmpfs; use
+`BENCH_PG_STORAGE=tmpfs` as well when the host disk stalls under sustained
+fsync load (check `journalctl -k | grep 'nvme.*timeout'`), memory allowing
+(~30 KB per conversation).
 
 `matrix.sh` alternates runtimes, sizes everything from the worker CPUs
 (Python processes, memory limit, fake LLM replicas, PostgreSQL
@@ -32,6 +41,13 @@ example on a 16+ core host:
 BENCH_CPU_LIST="2 4 8" BENCH_LEVELS=1,100,400,800,1600,3200,6400 \
 BENCH_SEEDED=600000 bench/matrix.sh
 ```
+
+Far beyond capacity, give each runtime its own worker concurrency with
+`BENCH_WORKER_CONCURRENCY_GO` / `BENCH_WORKER_CONCURRENCY_PYTHON` (per
+process): thousands of in-flight jobs per Python event loop collapse its
+throughput, while Go goroutines stay cheap. Use a warmup longer than the
+conversation time at the highest level, or the window only sees the first
+wave finishing.
 
 Keep the worker CPUs well below the host cores: PostgreSQL, RabbitMQ, the
 fake LLM and the generator share the machine, and the report's
@@ -118,9 +134,11 @@ most 1 % and whose conversation p95 stays within 2x the single-user p95.
 
 ## Caveats
 
-* Results in `results/` were measured on an Apple Silicon Mac (10 cores,
-  24 GiB) with Docker in a Colima VM of 8 CPUs and 16 GiB; the load
-  generator runs on the host outside the VM.
+* Results in `results/` (v1, v2) were measured on an Apple Silicon Mac (10
+  cores, 24 GiB) with Docker in a Colima VM of 8 CPUs and 16 GiB; the load
+  generator runs on the host outside the VM. `results/linux-final-*` were
+  measured on an Intel i7-10700 (8 cores / 16 threads, 31 GiB) running
+  Ubuntu 22.04; see its `SUMMARY.md`.
 
 * Run one runtime at a time on an otherwise idle machine. Docker Desktop
   adds virtualization overhead; numbers are for comparing the two runtimes on

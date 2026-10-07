@@ -12,6 +12,9 @@
 #                    (default 1,50,100,200,400,800,1600,3200)
 #   FAKE_LLM_LATENCY_MS / FAKE_LLM_JITTER_MS  per LLM call (default 715 / 840,
 #                    calibrated to google/gemini-2.5-flash-lite on OpenRouter)
+#   BENCH_WORKER_CONCURRENCY_GO / BENCH_WORKER_CONCURRENCY_PYTHON  per-runtime
+#                    worker concurrency (default BENCH_WORKER_CONCURRENCY,
+#                    1000; per process for Python)
 # Everything else (warmup, duration, seeds, storage, pools, generator
 # processes) can be overridden with the bench/run.sh variables.
 set -eu
@@ -62,9 +65,16 @@ while [ "$repeat" -le "$repeats" ]; do
       memory=$(( cpus * 1024 > 2048 ? cpus * 1024 : 2048 ))m
       # Build each runtime's images once per matrix.
       case " $built " in *" $runtime "*) no_build=1 ;; *) no_build=0 ;; esac
+      # Optional per-runtime caps: Go goroutines are cheap, while too many
+      # in-flight jobs per Python event loop lose throughput.
+      case "$runtime" in
+        go) concurrency=${BENCH_WORKER_CONCURRENCY_GO:-$BENCH_WORKER_CONCURRENCY} ;;
+        python) concurrency=${BENCH_WORKER_CONCURRENCY_PYTHON:-$BENCH_WORKER_CONCURRENCY} ;;
+      esac
       echo "== repeat $repeat/$repeats, $variant, $cpus CPU"
       output=$(
         WORKER_CPUS=$cpus WORKER_MEMORY=$memory DATA_ACCESS=$access \
+        BENCH_WORKER_CONCURRENCY=$concurrency \
         FAKE_LLM_REPLICAS=${FAKE_LLM_REPLICAS:-$(( cpus * 2 ))} \
         BENCH_NO_BUILD=$no_build \
         "$root/bench/run.sh" "$runtime" 2>&1 | tee /dev/stderr | grep -v '^ \(Container\|Network\|Volume\|Image\)'
