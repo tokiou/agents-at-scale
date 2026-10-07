@@ -1,7 +1,9 @@
 # Replaces the real LLM provider with the deterministic fake LLM. Use it for
 # the controlled benchmark and integration tests:
 #   docker compose -f docker-compose.yml -f docker-compose.fake-llm.yml up
-# FAKE_LLM_LATENCY_MS / FAKE_LLM_JITTER_MS set the simulated inference time.
+# FAKE_LLM_LATENCY_MS / FAKE_LLM_JITTER_MS set the simulated inference time;
+# FAKE_LLM_REPLICAS spreads heavy load over several fake LLM processes (the
+# clients reach them through the service name's DNS round robin).
 x-fake-llm-client: &fake-llm-client
   environment:
     OPENROUTER_DEPLOYMENT: fake-integration
@@ -17,6 +19,8 @@ services:
   fake-llm:
     build:
       context: ../tests/integration/fake-llm
+    deploy:
+      replicas: ${FAKE_LLM_REPLICAS:-1}
     environment:
       FAKE_LLM_LATENCY_MS: ${FAKE_LLM_LATENCY_MS:-0}
       FAKE_LLM_JITTER_MS: ${FAKE_LLM_JITTER_MS:-0}

@@ -16,3 +16,4 @@ build/
 
 # Benchmark worker logs (results JSON and REPORT.md are kept)
 bench/results/**/*.log
+bench/results/matrix-*.txt

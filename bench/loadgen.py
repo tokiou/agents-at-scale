@@ -296,6 +296,14 @@ class LoadGenerator:
         await self.redis.aclose()
 
 
+def raise_open_file_limit() -> None:
+    """Thousands of users need more sockets than the usual soft limit of
+    1024 per process; raise it to the hard limit, as the Go runtime does."""
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    if soft < hard:
+        resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
+
+
 def _process_cpu_seconds() -> float:
     usage = resource.getrusage(resource.RUSAGE_SELF)
     return usage.ru_utime + usage.ru_stime
@@ -402,6 +410,7 @@ def summarize(users, conversations, measure_from, stop_at, sampler, warmup, dura
 
 
 def shard_main(args: argparse.Namespace, shard: int, shards: int, conn) -> None:
+    raise_open_file_limit()
     async def serve() -> None:
         generator = LoadGenerator(args, shard, shards)
         generator.watcher.start()
@@ -453,6 +462,7 @@ async def main() -> None:
     parser.add_argument("--processes", type=int, default=4, help="generator processes sharing the users")
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
+    raise_open_file_limit()
     args.run_id = uuid.uuid4().hex[:8]
     if args.config.startswith("@"):
         args.config = Path(args.config[1:]).read_text()

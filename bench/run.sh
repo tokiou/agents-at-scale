@@ -16,6 +16,10 @@
 #   BENCH_LLM_MODEL           OpenRouter model (default google/gemini-2.5-flash-lite)
 #   WORKER_PROCESSES          Python processes per worker (default WORKER_CPUS)
 #   DATA_ACCESS               Python repositories: orm (default) or asyncpg
+#   BENCH_PG_STORAGE          tmpfs (default) or volume: keep PostgreSQL data
+#                             on disk for long or heavy runs
+#   BENCH_PG_SHARED_BUFFERS / BENCH_PG_MAX_WAL_SIZE   PostgreSQL memory/WAL
+#   FAKE_LLM_REPLICAS         fake LLM processes (default 1)
 #   BENCH_GENERATOR           host (default) or colima: run the load generator
 #                             inside the Colima VM so load does not cross the
 #                             host port forwarding (needs ~/.bench-venv there
@@ -59,7 +63,12 @@ variant=$runtime
 [ "$runtime" = python ] && [ "$DATA_ACCESS" != orm ] && variant=python-$DATA_ACCESS
 export BENCH_DB_POOL=${BENCH_DB_POOL:-50}
 export BENCH_LLM_CONNECTIONS=${BENCH_LLM_CONNECTIONS:-500}
-export POSTGRES_MAX_CONNECTIONS=${POSTGRES_MAX_CONNECTIONS:-600}
+# Every process opens two pools of BENCH_DB_POOL (domain queries and agent
+# sessions/checkpoints): size max_connections for all worker processes plus
+# the api, with headroom.
+if [ "$runtime" = python ]; then processes=$WORKER_PROCESSES; else processes=1; fi
+export POSTGRES_MAX_CONNECTIONS=${POSTGRES_MAX_CONNECTIONS:-$(( (WORKER_REPLICAS * processes + 1) * 2 * BENCH_DB_POOL + 100 ))}
+export FAKE_LLM_REPLICAS=${FAKE_LLM_REPLICAS:-1}
 levels=${BENCH_LEVELS:-1,10,25,50,100,200,400}
 warmup=${BENCH_WARMUP:-5}
 duration=${BENCH_DURATION:-30}
@@ -67,6 +76,16 @@ seeded=${BENCH_SEEDED:-150000}
 groups=100
 
 cd "$root/$dir"
+if [ ! -f .env ]; then
+  # .env is not versioned; a fresh clone starts from the example values.
+  cp .env.example .env
+  echo "created $dir/.env from .env.example"
+fi
+if [ "${BENCH_PG_STORAGE:-tmpfs}" = volume ]; then
+  storage_files="-f $root/bench/compose.pg-volume.yml"
+else
+  storage_files=""
+fi
 if [ "$llm" = openrouter ]; then
   # Only the OpenRouter variables are read from the repository .env.
   eval "$(grep -E '^OPENROUTER_(API_KEY|BASE_URL)=' "$root/.env" | sed 's/^/export /')"
@@ -77,7 +96,7 @@ else
   export BENCH_LLM_MODEL=fake-llm
   llm_files="-f docker-compose.fake-llm.yml"
 fi
-compose="docker compose -p $project -f docker-compose.yml $llm_files -f docker-compose.bench.yml"
+compose="docker compose -p $project -f docker-compose.yml $llm_files -f docker-compose.bench.yml $storage_files"
 cleanup() { $compose down -v --remove-orphans >/dev/null 2>&1 || true; }
 trap cleanup EXIT INT TERM
 cleanup

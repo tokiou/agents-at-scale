@@ -1,0 +1,12 @@
+# Keeps the benchmark PostgreSQL data on a Docker volume instead of tmpfs.
+# Each conversation leaves ~30 KB of agent session/checkpoint rows, so long
+# or heavy runs would otherwise hold tens of GB in RAM. Used by bench/run.sh
+# with BENCH_PG_STORAGE=volume; the volume is removed with the stack.
+services:
+  postgres:
+    tmpfs: !reset []
+    volumes:
+      - bench_pg_data:/var/lib/postgresql/data
+
+volumes:
+  bench_pg_data:

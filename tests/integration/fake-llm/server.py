@@ -38,9 +38,14 @@ def simulated_latency() -> float:
 
 
 class Handler(BaseHTTPRequestHandler):
+    # Keep-alive: clients reuse connections instead of opening one per call,
+    # which would exhaust ephemeral ports at high request rates.
+    protocol_version = "HTTP/1.1"
+
     def do_GET(self):
         if self.path == "/health":
             self.send_response(200)
+            self.send_header("content-length", "0")
             self.end_headers()
             return
         self.send_error(404)

@@ -10,6 +10,35 @@ bench/run.sh python
 bench/.venv/bin/python bench/report.py bench/results/go-*.json bench/results/python-*.json
 ```
 
+## Full comparison on Linux
+
+Requirements: Docker Engine with the Compose plugin, `python3-venv`, and the
+repository cloned. On Linux the load generator runs directly on the host (no
+VM port forwarding), so `BENCH_GENERATOR` stays at its default.
+
+```bash
+python3 -m venv bench/.venv && bench/.venv/bin/pip install -r bench/requirements.txt
+bench/matrix.sh                      # Go, Python ORM, Python asyncpg on 1, 2, 4 CPUs
+BENCH_REPEATS=3 bench/matrix.sh      # three repetitions for run-to-run variation
+```
+
+`matrix.sh` alternates runtimes, sizes everything from the worker CPUs
+(Python processes, memory limit, fake LLM replicas, PostgreSQL
+connections), keeps PostgreSQL on a disk volume and writes
+`results/REPORT-<timestamp>.md`. Heavier profiles only change variables, for
+example on a 16+ core host:
+
+```bash
+BENCH_CPU_LIST="2 4 8" BENCH_LEVELS=1,100,400,800,1600,3200,6400 \
+BENCH_SEEDED=600000 bench/matrix.sh
+```
+
+Keep the worker CPUs well below the host cores: PostgreSQL, RabbitMQ, the
+fake LLM and the generator share the machine, and the report's
+`postgres CPU max` and `generator CPU max` columns show whether they became
+the bottleneck. Missing `adk-go/.env` and `langgraph-python/.env` are
+created from `.env.example` on the first run.
+
 ## What a run does
 
 1. Starts an isolated stack (`docker-compose.yml` + `docker-compose.fake-llm.yml`
